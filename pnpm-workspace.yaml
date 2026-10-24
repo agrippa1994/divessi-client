@@ -1,0 +1,10 @@
+packages:
+  - .
+# Vite+ selects both tools; avoid a second runtime/package-manager installation.
+runtimeOnFail: ignore
+pmOnFail: ignore
+overrides:
+  vite@*: npm:@voidzero-dev/vite-plus-core@1.3.0
+peerDependencyRules:
+  allowedVersions:
+    vite: '1.3.0'
