@@ -31,12 +31,14 @@ export type AchievementsInput = undefined;
 export type BuddiesInput = undefined;
 
 export interface BuddiesSearchInput {
+  /** Search/filter text. */
   string: string;
 }
 
 export interface CentersInput {
+  /** Latitude of the search/location origin. */
   lat: number;
-
+  /** Longitude of the search/location origin. */
   lon: number;
 }
 
@@ -53,104 +55,126 @@ export type GearInput = undefined;
 export type GearSetsInput = undefined;
 
 export interface LoginInput {
+  /** Account login/email supplied to authentication. */
   l: string;
-
+  /** Account password supplied to authentication. */
   p: string;
 }
 
 export type ProfileInput = undefined;
 
 export interface SiteInput {
+  /** Dive-site identifier. */
   dsid: Identifier;
 }
 
 export interface SiteDetailInput {
+  /** Dive-site identifier. */
   site_id: Identifier;
 }
 
 export interface SitesInput {
+  /** Incremental synchronization marker; timestamp unit is unspecified. */
   last_sync: number;
-
+  /** Offset into the result listing. */
   offset?: number;
-
+  /** Maximum number of requested listing results. */
   limit?: number;
 }
 
 export type TablesInput = undefined;
 
 export interface BuddyUploadInput {
+  /** Structured request data. The client encodes this outer value once; JSON-text fields inside it still use their own string encoding. */
   json_data: Buddy;
 }
 
 export interface DeleteGearInput {
+  /** Equipment record identifier. */
   gear_id: Identifier;
 }
 
 export interface DeleteGearImageInput {
+  /** Equipment record identifier. */
   gear_id: Identifier;
-
+  /** Image record identifier. */
   image_id: Identifier;
 }
 
 export interface DiveUploadInput {
+  /** Structured request data. The client encodes this outer value once; JSON-text fields inside it still use their own string encoding. */
   json_data: DiveLog;
 }
 
 export interface EmergencyContactUploadInput {
+  /** Structured request data. The client encodes this outer value once; JSON-text fields inside it still use their own string encoding. */
   json_data: EmergencyContact;
 }
 
 export type EmergencyContactsInput = undefined;
 
 export interface GearSetUploadInput {
+  /** Structured request data. The client encodes this outer value once; JSON-text fields inside it still use their own string encoding. */
   json_data: GearSet;
 }
 
 export interface GearUploadInput {
+  /** Structured request data. The client encodes this outer value once; JSON-text fields inside it still use their own string encoding. */
   json_data: Gear;
 }
 
 export interface PrivacySettingsUploadInput {
+  /** Structured request data. The client encodes this outer value once; JSON-text fields inside it still use their own string encoding. */
   json_data: PrivacySettingsData;
 }
 
 export interface ProfileImageUploadInput {
+  /** Structured request data. The client encodes this outer value once; JSON-text fields inside it still use their own string encoding. */
   json_data: ProfileImageData;
 }
 
 export interface ProfileUploadInput {
+  /** Structured request data. The client encodes this outer value once; JSON-text fields inside it still use their own string encoding. */
   json_data: User;
 }
 
 export interface SaveGearImageInput {
+  /** Structured request data. The client encodes this outer value once; JSON-text fields inside it still use their own string encoding. */
   json_data: GearImageData;
 }
 
 export interface SaveUserDivecomputerInput {
+  /** Structured request data. The client encodes this outer value once; JSON-text fields inside it still use their own string encoding. */
   json_data: JsonValue;
 }
 
 export interface SiteDescriptionUploadInput {
+  /** Structured request data. The client encodes this outer value once; JSON-text fields inside it still use their own string encoding. */
   json_data: SiteDescriptionData;
 }
 
 export interface SiteImageUploadInput {
+  /** Structured request data. The client encodes this outer value once; JSON-text fields inside it still use their own string encoding. */
   json_data: SiteImageData;
 }
 
 export interface SiteUploadInput {
+  /** Structured request data. The client encodes this outer value once; JSON-text fields inside it still use their own string encoding. */
   json_data: Site;
 }
 
 export interface UploadDivelogHistoryInput {
+  /** Structured request data. The client encodes this outer value once; JSON-text fields inside it still use their own string encoding. */
   json_data: JsonValue;
 }
 
 export interface NewEmailUploadInput {
+  /** Structured request data. The client encodes this outer value once; JSON-text fields inside it still use their own string encoding. */
   json_data: NewEmailData;
 }
 
 export interface NewPasswordUploadInput {
+  /** Structured request data. The client encodes this outer value once; JSON-text fields inside it still use their own string encoding. */
   json_data: NewPasswordData;
 }
 

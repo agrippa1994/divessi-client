@@ -7,6 +7,7 @@
     "dist",
     "README.md",
     "API.md",
+    "FIELD-GUIDE.md",
     "LICENSE"
   ],
   "type": "module",

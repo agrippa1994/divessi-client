@@ -46,7 +46,7 @@ For image writes, `save_image` dispatches to the appropriate typed operation for
 
 ## Inputs and responses
 
-The declarations in `src/api/contracts.ts` describe operation inputs and outputs. `src/api/models.ts` defines sparse wire models: fields can be missing or null, and additional JSON properties are preserved. `JsonValue` marks responses or fields without a narrower contract.
+The declarations in `src/api/contracts.ts` describe operation inputs and outputs. `src/api/models.ts` defines sparse wire models: fields can be missing or null, and additional JSON properties are preserved. `JsonValue` marks responses or fields without a narrower contract. See [FIELD-GUIDE.md](./FIELD-GUIDE.md) for descriptions of every named model field and request input field; these descriptions are also included in the TypeScript declarations.
 
 Request validation checks parameter names and modeled value types. It does not prove which inner fields the server requires, whether a caller is authorized, or whether a business operation succeeded. Inspect the response and confirm writes by reading the affected record.
 

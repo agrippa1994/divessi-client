@@ -79,7 +79,7 @@ Inspect the business result and re-fetch the record to confirm a write. HTTP suc
 
 ## Types and request options
 
-Models describe selected fields and permit additional JSON properties. Optional fields do not imply that the server accepts an incomplete write. JSON-string fields have typed helpers:
+Models describe selected fields and permit additional JSON properties. Every named model field and request input field has a description in its TypeScript declaration for editor tooltips. The [field guide](./FIELD-GUIDE.md) lists all model fields with their types, meanings, units, and stated uncertainties. Optional fields do not imply that the server accepts an incomplete write. JSON-string fields have typed helpers:
 
 ```ts
 import { decodeJsonField, encodeJsonField } from 'divessi-client';
