@@ -11,7 +11,14 @@ Independent project. Not affiliated with, endorsed by, or supported by Scuba Sch
 
 This is an unofficial, statically described interface. The public site ZIP and invalid-token logbook responses have been checked against the live service; successful account operations and writes have not been live-verified. The service can change or restrict access at any time. Only access accounts and data you are authorized to use; this project's license does not grant rights to the service or its content.
 
-## Build and install
+## Install
+
+```sh
+pnpm add divessi-client
+# or: npm install divessi-client
+```
+
+Releases are published to npm from GitHub Actions. Until the first npm release is available, build and install a local archive:
 
 Requires Node.js 24 and the package manager specified in `package.json`.
 
@@ -25,7 +32,7 @@ pnpm pack
 Install the resulting archive into your application:
 
 ```sh
-pnpm add /path/to/divessi-client-0.1.0.tgz
+pnpm add /path/to/divessi-client-VERSION.tgz
 ```
 
 ## Login and read your logbook
@@ -45,6 +52,16 @@ if (!session.authenticated || !session.token) {
 
 const { data } = await client.get_divelog();
 const dives = data.logbook_details ?? [];
+const activeDives = dives.filter((dive) => dive.odin_user_log_deleted !== true);
+
+for (const dive of activeDives) {
+  console.log({
+    id: dive.odin_user_log_id,
+    date: dive.odin_user_log_date,
+    depthMeters: dive.odin_user_log_depth_m,
+    durationMinutes: dive.odin_user_log_divetime,
+  });
+}
 ```
 
 Successful login stores the returned token in that client instance. `getToken()`, `setToken()`, `clearToken()`, and the optional `onTokenChange` callback let your application manage storage. There is no credential persistence or telemetry in the library.
@@ -59,6 +76,40 @@ Requests default to the SSI client identity needed by the service: `User-Agent: 
 without a session token and returns `ApiResponse<ArrayBuffer>`. The standalone
 `initialSites(client)` export is equivalent. Unzip and cache these bytes in your
 application; the client does not depend on a filesystem or ZIP library.
+
+## Create a dive
+
+Use the authenticated `client` from above and provide the actual dive details. A null server ID requests a new record:
+
+```ts
+import type { DiveLog } from 'divessi-client';
+
+const dive: DiveLog = {
+  odin_user_log_id: null,
+  odin_user_log_date: '2026-10-24',
+  odin_user_log_entry_time: '09:30',
+  odin_user_log_depth_m: 18.5,
+  odin_user_log_divetime: 42,
+  odin_user_log_watertemp_c: 23,
+  odin_user_log_comment: 'Reef dive; turtle near the safety stop.',
+};
+
+const { data: saved } = await client.save_divelog({ json_data: dive });
+// Inspect the business result: HTTP success alone does not confirm creation.
+console.log(saved.result, saved.success, saved.odin_user_log_id);
+const { data: refreshed } = await client.get_divelog();
+// Inspect the refreshed logbook before retrying an uncertain save.
+```
+
+The server's minimum creation fields and success conventions are unspecified. The client does not infer dates, convert units, or retry writes. Use real server identifiers for optional site, buddy, and equipment links; omit local database properties.
+
+The [runnable examples](./examples/README.md) use environment-based authentication, list active dives, decode depth samples, and read the logbook before and after creation. They are included in the npm archive and checked by TypeScript. From a built checkout:
+
+```sh
+node examples/read-dives.ts
+node examples/read-dives.ts 123
+node examples/create-dive.ts /path/to/your-dive.json
+```
 
 ## Update a dive
 
@@ -120,6 +171,8 @@ Per-call options support `signal`, `headers`, `metadata`, `token`, and `response
 ## Development and validation
 
 `pnpm test` runs mocked runtime tests and declaration checks for ESM, CommonJS, and a portable ES2022 environment. `pnpm test:bun` runs the runtime suite in Bun when installed. Tests do not contact the service. React Native device compatibility and live server acceptance are not established by these checks.
+
+`pnpm test:package` installs the actual npm archive in isolation and verifies both module formats and the release version. Add a changeset with `pnpm changeset` for changes that should ship. The [release guide](./RELEASING.md) covers npm trusted publishing, reviewed semantic version bumps, changelogs, tags, and GitHub releases.
 
 ## License
 

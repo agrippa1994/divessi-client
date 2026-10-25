@@ -19,7 +19,7 @@ function mock(body, status = 200, contentType = 'application/json') {
   return { client, calls };
 }
 
-test('login preserves API path, encodes credentials, omits old auth and stores returned token', async () => {
+void test('login preserves API path, encodes credentials, omits old auth and stores returned token', async () => {
   const { client, calls } = mock({
     authenticated: true,
     token: 'new-session',
@@ -40,7 +40,7 @@ test('login preserves API path, encodes credentials, omits old auth and stores r
   assert.equal(client.getToken(), 'new-session');
 });
 
-test('typed dive response preserves envelope and nested records', async () => {
+void test('typed dive response preserves envelope and nested records', async () => {
   const body = {
     logbook_details: [
       { odin_user_log_id: 4, odin_user_log_depth_m: 21.5, server_extra: 'retained' },
@@ -56,7 +56,7 @@ test('typed dive response preserves envelope and nested records', async () => {
   assert.equal(params.get('lang'), 'eng');
 });
 
-test('strict mode rejects malformed modeled response fields', async () => {
+void test('strict mode rejects malformed modeled response fields', async () => {
   const { client } = mock({ logbook_details: [{ odin_user_log_depth_m: 'deep' }] });
   await assert.rejects(
     client.get_divelog(undefined, { responseValidation: 'strict' }),
@@ -66,7 +66,7 @@ test('strict mode rejects malformed modeled response fields', async () => {
   );
 });
 
-test('dive response boolean flags normalize explicit wire encodings and preserve other fields', async () => {
+void test('dive response boolean flags normalize explicit wire encodings and preserve other fields', async () => {
   const flags = [false, true, 0, 1, '0', '1', 'false', 'true', null];
   const expected = [false, true, false, true, false, true, false, true, null];
   const { client } = mock({
@@ -94,7 +94,7 @@ test('dive response boolean flags normalize explicit wire encodings and preserve
   ]);
 });
 
-test('invalid boolean response encodings retain their decode error path', async () => {
+void test('invalid boolean response encodings retain their decode error path', async () => {
   for (const flag of [2, -1, '', 'yes', 'FALSE', '00', [], {}]) {
     const { client } = mock({ logbook_details: [{ odin_user_log_deleted: flag }] });
     await assert.rejects(client.get_divelog(undefined, { responseValidation: 'strict' }), (e) => {
@@ -106,7 +106,7 @@ test('invalid boolean response encodings retain their decode error path', async 
   }
 });
 
-test('response boolean normalization applies to top-level model arrays and login sessions', async () => {
+void test('response boolean normalization applies to top-level model arrays and login sessions', async () => {
   const gear = mock([{ gearset_deleted: '0', needsUpload: 1 }]);
   const operation = Object.entries(api.operations).find(
     ([, spec]) => spec.output === 'GearSet[]',
@@ -119,7 +119,7 @@ test('response boolean normalization applies to top-level model arrays and login
   assert.equal(login.client.getToken(), 'new-session');
 });
 
-test('custom decoders receive the original boolean wire encodings', async () => {
+void test('custom decoders receive the original boolean wire encodings', async () => {
   const body = { logbook_details: [{ odin_user_log_deleted: '0' }] };
   const { client } = mock(body);
   const result = await client.get_divelog(undefined, {
@@ -131,7 +131,7 @@ test('custom decoders receive the original boolean wire encodings', async () => 
   assert.equal(result.data, '0');
 });
 
-test('boolean request fields remain strict and are serialized without coercion', async () => {
+void test('boolean request fields remain strict and are serialized without coercion', async () => {
   const { client, calls } = mock({});
   for (const flag of [0, 1, '0', '1', 'false', 'true']) {
     const dive = { odin_user_log_deleted: flag };
@@ -145,7 +145,7 @@ test('boolean request fields remain strict and are serialized without coercion',
   });
 });
 
-test('save_divelog sends one JSON encoding in a form body and dispatches in query', async () => {
+void test('save_divelog sends one JSON encoding in a form body and dispatches in query', async () => {
   const { client, calls } = mock({ result: 'ok', dive: {} });
   const dive = {
     odin_user_log_id: 4,
@@ -168,7 +168,7 @@ test('save_divelog sends one JSON encoding in a form body and dispatches in quer
   assert.equal(form.has('what'), false);
 });
 
-test('image variants retain their different placement and fixed type values', async () => {
+void test('image variants retain their different placement and fixed type values', async () => {
   const { client, calls } = mock({ result: 'ok' });
   await client.save_image({
     type: 'user_with_check',
@@ -195,7 +195,7 @@ test('image variants retain their different placement and fixed type values', as
   );
 });
 
-test('HTTP errors expose status but do not include credential-bearing URL in their message', async () => {
+void test('HTTP errors expose status but do not include credential-bearing URL in their message', async () => {
   const { client } = mock({ error_message: 'denied' }, 401);
   await assert.rejects(
     client.login({ l: 'private@example.invalid', p: 'private-password' }),
@@ -210,7 +210,7 @@ test('HTTP errors expose status but do not include credential-bearing URL in the
   assert.equal(client.getToken(), 'test-session');
 });
 
-test('a validating decoder changes the inferred/body result without hiding HTTP metadata', async () => {
+void test('a validating decoder changes the inferred/body result without hiding HTTP metadata', async () => {
   const { client } = mock({ something: [1, 2, 3] });
   const result = await client.get_vars(undefined, {
     decode(value) {
@@ -228,7 +228,7 @@ test('a validating decoder changes the inferred/body result without hiding HTTP 
   assert.equal(result.status, 200);
 });
 
-test('invalid inputs fail before fetching, including unknown parameter names and cyclic JSON', async () => {
+void test('invalid inputs fail before fetching, including unknown parameter names and cyclic JSON', async () => {
   const { client, calls } = mock({});
   await assert.rejects(client.login({ l: 'user' }), api.DivessiInputError);
   await assert.rejects(
@@ -245,7 +245,7 @@ test('invalid inputs fail before fetching, including unknown parameter names and
   assert.equal(calls.length, 0);
 });
 
-test('per-call auth and cancellation remain isolated from other clients', async () => {
+void test('per-call auth and cancellation remain isolated from other clients', async () => {
   const { client, calls } = mock({ logbook_details: [], logbook_sites: [] });
   const other = api.createClient({ fetch: async () => new Response('{}') });
   const abort = new AbortController();
@@ -258,7 +258,7 @@ test('per-call auth and cancellation remain isolated from other clients', async 
   assert.equal(client.getToken(), undefined);
 });
 
-test('portable transport works with a minimal fetch shim and without URL/URLSearchParams', async () => {
+void test('portable transport works with a minimal fetch shim and without URL/URLSearchParams', async () => {
   const { URL: savedURL, URLSearchParams: savedParams, fetch: savedFetch } = globalThis;
   let sent;
   try {
@@ -292,7 +292,7 @@ test('portable transport works with a minimal fetch shim and without URL/URLSear
   }
 });
 
-test('all supported operations have callable named exports and produce transport-valid requests', async () => {
+void test('all supported operations have callable named exports and produce transport-valid requests', async () => {
   let calls = 0;
   const client = api.createClient({
     fetch: async () => {
@@ -334,14 +334,14 @@ test('all supported operations have callable named exports and produce transport
   assert.equal(calls, 36);
 });
 
-test('CommonJS entry is usable independently of the ESM entry', async () => {
+void test('CommonJS entry is usable independently of the ESM entry', async () => {
   const cjs = createRequire(import.meta.url)('../dist/cjs/index.js');
   assert.equal(typeof cjs.createClient, 'function');
   const client = cjs.createClient({ fetch: async () => new Response('{"user_buddies":[]}') });
   assert.deepEqual((await client.get_buddies()).data.user_buddies, []);
 });
 
-test('JSON field codecs validate structured sample records and keep both wire encoding layers', async () => {
+void test('JSON field codecs validate structured sample records and keep both wire encoding layers', async () => {
   const samples = [
     {
       n: 1,
@@ -379,7 +379,7 @@ test('JSON field codecs validate structured sample records and keep both wire en
   );
 });
 
-test('explicit JSON field decoding rejects malformed text and nested values with precise paths', () => {
+void test('explicit JSON field decoding rejects malformed text and nested values with precise paths', () => {
   for (const text of ['', '[', '{}', '["deep"]', '[1e999]']) {
     assert.throws(
       () => api.decodeJsonField('DiveLog', 'odin_user_log_depthDataset', text),
@@ -402,7 +402,7 @@ test('explicit JSON field decoding rejects malformed text and nested values with
   assert.throws(() => api.decodeJsonField('SiteDetail', 'current', '[]'), api.DivessiDecodeError);
 });
 
-test('JSON codecs reject sparse arrays before serialization and preserve explicit nullable samples', async () => {
+void test('JSON codecs reject sparse arrays before serialization and preserve explicit nullable samples', async () => {
   const gap = [{ n: 1 }, { n: 2 }, { n: 3 }];
   Reflect.deleteProperty(gap, 1);
   const emptySlots = [];
@@ -427,7 +427,7 @@ test('JSON codecs reject sparse arrays before serialization and preserve explici
   assert.deepEqual(api.decodeJsonField('DiveLog', 'odin_user_log_depthDataset', encoded), explicit);
 });
 
-test('wire decoding preserves legacy empty JSON strings and validates converted collections', async () => {
+void test('wire decoding preserves legacy empty JSON strings and validates converted collections', async () => {
   const { client } = mock({
     logbook_details: [{ odin_user_log_depthDataset: '', odin_user_log_gear: [1] }],
   });
@@ -456,7 +456,7 @@ test('wire decoding preserves legacy empty JSON strings and validates converted 
   );
 });
 
-test('configured API base paths are retained', async () => {
+void test('configured API base paths are retained', async () => {
   const calls = [];
   const client = api.createClient({
     apiBaseUrl: 'https://example.invalid/proxy/app/',
@@ -470,7 +470,7 @@ test('configured API base paths are retained', async () => {
   assert.throws(() => api.createClient({ apiBaseUrl: 'https://' }), TypeError);
 });
 
-test('SSI client identity defaults and case-insensitive header overrides are applied', async () => {
+void test('SSI client identity defaults and case-insensitive header overrides are applied', async () => {
   const calls = [];
   const fetch = async (url, init) => {
     calls.push({ url, init });
@@ -507,7 +507,7 @@ test('SSI client identity defaults and case-insensitive header overrides are app
   assert.throws(() => api.createClient({ fetch, userAgent: 'bad\r\nheader' }), TypeError);
 });
 
-test('published operations use only the account API and carry no provenance payloads', () => {
+void test('published operations use only the account API and carry no provenance payloads', () => {
   for (const spec of Object.values(api.operations)) {
     assert.equal(spec.service, 'api');
     assert.ok(['session', 'none'].includes(spec.auth));
@@ -520,7 +520,7 @@ test('published operations use only the account API and carry no provenance payl
   }
 });
 
-test('initialSites downloads ZIP bytes without a token through both public APIs', async () => {
+void test('initialSites downloads ZIP bytes without a token through both public APIs', async () => {
   const calls = [];
   const archive = new Uint8Array([80, 75, 3, 4]);
   const client = api.createClient({
@@ -547,7 +547,7 @@ test('initialSites downloads ZIP bytes without a token through both public APIs'
   assert.equal(calls.length, 2);
 });
 
-test('initialSites preserves HTTP errors instead of returning error bodies as ZIP bytes', async () => {
+void test('initialSites preserves HTTP errors instead of returning error bodies as ZIP bytes', async () => {
   const { client } = mock({ message: 'Unavailable' }, 503);
   await assert.rejects(
     client.initialSites(),
@@ -555,7 +555,7 @@ test('initialSites preserves HTTP errors instead of returning error bodies as ZI
   );
 });
 
-test('confirmation identifiers accept numeric and string SSI encodings without coercion', async () => {
+void test('confirmation identifiers accept numeric and string SSI encodings without coercion', async () => {
   const identifiers = [0, 12345, '', '0', '0012345', '9007199254740993', null];
   const body = {
     logbook_details: identifiers.map((id) => ({
@@ -568,7 +568,7 @@ test('confirmation identifiers accept numeric and string SSI encodings without c
   assert.deepEqual((await client.get_divelog()).data, body);
 });
 
-test('confirmation identifiers still reject boolean and structured values', async () => {
+void test('confirmation identifiers still reject boolean and structured values', async () => {
   for (const id of [false, true, [], {}]) {
     const { client } = mock({ logbook_details: [{ odin_user_log_user_confirmed_id: id }] });
     await assert.rejects(
@@ -581,7 +581,7 @@ test('confirmation identifiers still reject boolean and structured values', asyn
   }
 });
 
-test('confirmation identifier writes preserve accepted values and reject invalid inputs', async () => {
+void test('confirmation identifier writes preserve accepted values and reject invalid inputs', async () => {
   const { client, calls } = mock({});
   for (const id of [0, 12345, '0012345', null]) {
     await client.save_divelog({ json_data: { odin_user_log_user_confirmed_id: id } });
@@ -597,7 +597,7 @@ test('confirmation identifier writes preserve accepted values and reject invalid
   assert.equal(calls.length, 4);
 });
 
-test('lenient defaults keep every dive while omitting incompatible optional fields', async () => {
+void test('lenient defaults keep every dive while omitting incompatible optional fields', async () => {
   const body = {
     logbook_details: Array.from({ length: 13 }, (_, index) => ({
       odin_user_log_nr: index + 1,
@@ -620,7 +620,7 @@ test('lenient defaults keep every dive while omitting incompatible optional fiel
   assert.equal(response.rawData.logbook_details[12].odin_user_log_var_specialdive_id, 123);
 });
 
-test('lenient decoding applies recursively and skips only invalid array entries', async () => {
+void test('lenient decoding applies recursively and skips only invalid array entries', async () => {
   const { client } = mock({
     logbook_details: [null, 7, { odin_user_log_nr: 5, odin_user_log_buddy_ids: [1, 'bad', 2] }],
     logbook_sites: [{ odin_dive_sites_id: 3, odin_dive_sites_name: 123 }],
@@ -632,7 +632,7 @@ test('lenient decoding applies recursively and skips only invalid array entries'
   assert.deepEqual(data.logbook_sites, [{ odin_dive_sites_id: 3 }]);
 });
 
-test('response mode supports strict opt-in and per-call overrides', async () => {
+void test('response mode supports strict opt-in and per-call overrides', async () => {
   const client = api.createClient({
     responseValidation: 'strict',
     fetch: async () => Response.json({ logbook_details: [{ odin_user_log_depth_m: 'deep' }] }),
@@ -648,14 +648,14 @@ test('response mode supports strict opt-in and per-call overrides', async () => 
   );
 });
 
-test('lenient decoding still rejects unusable response envelopes and HTTP failures', async () => {
+void test('lenient decoding still rejects unusable response envelopes and HTTP failures', async () => {
   const envelope = mock('unexpected body');
   await assert.rejects(envelope.client.get_divelog(), api.DivessiDecodeError);
   const http = mock({ error_message: 'Unavailable' }, 503);
   await assert.rejects(http.client.get_divelog(), api.DivessiHttpError);
 });
 
-test('custom decoders receive unmodified fields regardless of response mode', async () => {
+void test('custom decoders receive unmodified fields regardless of response mode', async () => {
   const { client } = mock({ logbook_details: [{ odin_user_log_depth_m: 'deep' }] });
   const response = await client.get_divelog(undefined, {
     responseValidation: 'strict',
@@ -667,7 +667,7 @@ test('custom decoders receive unmodified fields regardless of response mode', as
   assert.equal(response.rawData.logbook_details[0].odin_user_log_depth_m, 'deep');
 });
 
-test('rawData stays independent of edits to modeled and unknown nested response data', async () => {
+void test('rawData stays independent of edits to modeled and unknown nested response data', async () => {
   const body = {
     logbook_details: [
       {
@@ -690,7 +690,7 @@ test('rawData stays independent of edits to modeled and unknown nested response 
   }
 });
 
-test('custom decoder mutations leave the original rawData intact', async () => {
+void test('custom decoder mutations leave the original rawData intact', async () => {
   const body = {
     logbook_details: [{ odin_user_log_depth_m: 10, extra: { note: 'original' } }],
   };
@@ -707,7 +707,7 @@ test('custom decoder mutations leave the original rawData intact', async () => {
   assert.equal(response.data.logbook_details[0].extra.note, 'edited');
 });
 
-test('unmodeled JSON responses also separate data from rawData', async () => {
+void test('unmodeled JSON responses also separate data from rawData', async () => {
   const body = [{ nested: { items: [1, null, 'original'] } }];
   const { client } = mock(body);
   const response = await client.get_vars();
@@ -715,7 +715,7 @@ test('unmodeled JSON responses also separate data from rawData', async () => {
   assert.deepEqual(response.rawData, body);
 });
 
-test('logbook_buddies uses the Buddy model and normalizes legacy boolean flags', async () => {
+void test('logbook_buddies uses the Buddy model and normalizes legacy boolean flags', async () => {
   const { client } = mock({
     logbook_buddies: [
       {
@@ -750,7 +750,7 @@ test('logbook_buddies uses the Buddy model and normalizes legacy boolean flags',
   assert.equal(response.rawData.logbook_buddies[0].favorite, '1');
 });
 
-test('logbook buddies remain optional and tolerate incomplete records', async () => {
+void test('logbook buddies remain optional and tolerate incomplete records', async () => {
   for (const body of [{}, { logbook_buddies: null }, { logbook_buddies: [] }]) {
     const { client } = mock(body);
     assert.deepEqual((await client.get_divelog()).data, body);
