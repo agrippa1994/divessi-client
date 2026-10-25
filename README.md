@@ -101,6 +101,8 @@ response decoding is lenient: incompatible optional fields are omitted from
 `data`, invalid array entries are skipped, and the remaining records are kept.
 Unknown fields and null values are preserved. The unchanged original values
 remain available in `rawData`, including fields omitted from the typed result.
+Decoding uses a separate copy, so edits to `data` and mutations inside custom
+decoders leave `rawData` unchanged.
 Use that original snapshot when inspecting discrepancies or preparing a full
 read-modify-write operation; request validation still applies when uploading.
 

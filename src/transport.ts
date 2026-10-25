@@ -74,6 +74,17 @@ function metadataQuery(metadata: ClientMetadata): Record<string, QueryValue> {
   return result;
 }
 
+function copyJson(value: JsonValue): JsonValue {
+  if (Array.isArray(value)) return value.map(copyJson);
+  if (!isObject(value)) return value;
+  return Object.fromEntries(
+    Object.entries(value).map(([key, item]) => [
+      key,
+      item === undefined ? undefined : copyJson(item),
+    ]),
+  );
+}
+
 function responseValidationMode(value: unknown): ResponseValidation {
   const mode = value ?? 'lenient';
   if (mode !== 'lenient' && mode !== 'strict')
@@ -227,10 +238,12 @@ export class Transport {
       }
     }
     if (!success) throw new DivessiHttpError(name, response.status, data);
+    // Decoders own this copy; rawData retains the original parsed response.
+    const decodeInput = copyJson(data);
     const decoded = options.decode
-      ? options.decode(data)
-      : decodeModel<T>(data, spec.output, name, validation);
-    const session = options.decode ? data : decoded;
+      ? options.decode(decodeInput)
+      : decodeModel<T>(decodeInput, spec.output, name, validation);
+    const session = options.decode ? decodeInput : decoded;
     if (
       name === 'login' &&
       isObject(session) &&

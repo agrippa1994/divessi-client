@@ -83,11 +83,11 @@ export interface CallOptions<T> {
   metadata?: ClientMetadata;
   /** Request-header overrides, matched case-insensitively. Form Content-Type remains controlled by the transport. */
   headers?: Record<string, string>;
-  /** Validate/transform the raw response yourself; the inferred result type follows this function. */
+  /** Validate/transform an independent copy of the raw response; the inferred result type follows this function. */
   decode?: Decoder<T>;
 }
 export interface ApiResponse<T> {
-  /** Original parsed body for JSON operations, including fields omitted by lenient decoding. Absent for binary downloads. */
+  /** Independent original parsed body for JSON operations, including fields omitted by lenient decoding. Absent for binary downloads. */
   rawData?: JsonValue;
   /** Decoded response body, or raw bytes for a binary operation. */
   data: T;

@@ -666,3 +666,51 @@ test('custom decoders receive unmodified fields regardless of response mode', as
   assert.equal(response.data, 'deep');
   assert.equal(response.rawData.logbook_details[0].odin_user_log_depth_m, 'deep');
 });
+
+test('rawData stays independent of edits to modeled and unknown nested response data', async () => {
+  const body = {
+    logbook_details: [
+      {
+        odin_user_log_deleted: '0',
+        odin_user_log_buddy_ids: [1, 2],
+        server_extra: { notes: ['original', null] },
+      },
+    ],
+    logbook_history: { 2025: 4 },
+  };
+  for (const responseValidation of ['lenient', 'strict']) {
+    const { client } = mock(body);
+    const response = await client.get_divelog(undefined, { responseValidation });
+    response.data.logbook_details[0].odin_user_log_buddy_ids.push(3);
+    response.data.logbook_details[0].server_extra.notes[0] = 'edited';
+    response.data.logbook_history[2025] = 99;
+    assert.deepEqual(response.rawData, body);
+    response.rawData.logbook_details[0].server_extra.notes[1] = 'raw edit';
+    assert.equal(response.data.logbook_details[0].server_extra.notes[1], null);
+  }
+});
+
+test('custom decoder mutations leave the original rawData intact', async () => {
+  const body = {
+    logbook_details: [{ odin_user_log_depth_m: 10, extra: { note: 'original' } }],
+  };
+  const { client } = mock(body);
+  const response = await client.get_divelog(undefined, {
+    decode(value) {
+      delete value.logbook_details[0].odin_user_log_depth_m;
+      value.logbook_details[0].extra.note = 'edited';
+      return value;
+    },
+  });
+  assert.deepEqual(response.rawData, body);
+  assert.equal(Object.hasOwn(response.data.logbook_details[0], 'odin_user_log_depth_m'), false);
+  assert.equal(response.data.logbook_details[0].extra.note, 'edited');
+});
+
+test('unmodeled JSON responses also separate data from rawData', async () => {
+  const body = [{ nested: { items: [1, null, 'original'] } }];
+  const { client } = mock(body);
+  const response = await client.get_vars();
+  response.data[0].nested.items[2] = 'edited';
+  assert.deepEqual(response.rawData, body);
+});

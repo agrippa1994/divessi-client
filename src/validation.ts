@@ -35,83 +35,89 @@ export function isJson(value: unknown): value is JsonValue {
   return checkJson(value, new Set());
 }
 
-function checkModel(
-  value: unknown,
-  type: string,
-  fail: (field: string, type: string) => never,
-  path: string,
-  decodeBooleans: boolean,
-  lenient = false,
-): unknown {
-  // Preserve legacy empty strings on API calls; explicit field codecs check the contents.
-  if (type.startsWith('json:')) {
-    if (typeof value !== 'string') fail(path, 'JSON text string');
-    return value;
-  }
-  if (type === 'unknown' || type === 'JsonValue') {
-    if (!isJson(value)) fail(path, 'JSON value');
-    return value;
-  }
-  if (type === 'JsonObject') {
-    if (!isObject(value) || !isJson(value)) fail(path, 'JSON object');
-    return value;
-  }
-  if (type.endsWith('[]')) {
-    if (!Array.isArray(value)) fail(path, type);
-    const decoded: unknown[] = [];
-    (value as unknown[]).forEach((item, i) => {
-      try {
-        decoded.push(
-          checkModel(item, type.slice(0, -2), fail, `${path}[${i}]`, decodeBooleans, lenient),
-        );
-      } catch (error) {
-        if (!lenient || !(error instanceof DivessiDecodeError)) throw error;
-      }
-    });
-    return decodeBooleans ? decoded : value;
-  }
-  if (type === 'identifier' || type === 'scalar') {
-    if (typeof value !== 'string' && !(typeof value === 'number' && Number.isFinite(value)))
-      fail(path, 'string or finite number');
-    return value;
-  }
-  if (type.endsWith('?')) {
-    return value === null
-      ? value
-      : checkModel(value, type.slice(0, -1), fail, path, decodeBooleans, lenient);
-  }
-  if (type === 'boolean' && decodeBooleans) {
+type ParseMode = 'validate' | ResponseValidation;
+type ParseResult =
+  | { valid: true; value: JsonValue }
+  | { valid: false; field: string; expected: string };
+
+function mismatch(field: string, expected: string): ParseResult {
+  return { valid: false, field, expected };
+}
+
+function parseBoolean(value: unknown, mode: ParseMode): unknown {
+  if (mode !== 'validate') {
     if (value === 0 || value === '0' || value === 'false') return false;
     if (value === 1 || value === '1' || value === 'true') return true;
   }
-  if (type === 'string' || type === 'number' || type === 'boolean') {
-    if (typeof value !== type || (type === 'number' && !Number.isFinite(value))) fail(path, type);
-    return value;
+  return value;
+}
+
+function parseModel(value: unknown, type: string, path: string, mode: ParseMode): ParseResult {
+  // Preserve legacy empty strings on API calls; explicit field codecs check the contents.
+  if (type.startsWith('json:')) {
+    return typeof value === 'string' ? { valid: true, value } : mismatch(path, 'JSON text string');
+  }
+  if (type === 'unknown' || type === 'JsonValue') {
+    return isJson(value) ? { valid: true, value } : mismatch(path, 'JSON value');
+  }
+  if (type === 'JsonObject') {
+    return isObject(value) && isJson(value)
+      ? { valid: true, value }
+      : mismatch(path, 'JSON object');
+  }
+  if (type.endsWith('[]')) {
+    if (!Array.isArray(value)) return mismatch(path, type);
+    const decoded: JsonValue[] = [];
+    for (const [i, item] of value.entries()) {
+      const parsed = parseModel(item, type.slice(0, -2), `${path}[${i}]`, mode);
+      if (parsed.valid) {
+        decoded.push(parsed.value);
+      } else if (mode !== 'lenient') {
+        return parsed;
+      }
+    }
+    return { valid: true, value: decoded };
+  }
+  if (type === 'identifier' || type === 'scalar') {
+    return typeof value === 'string' || (typeof value === 'number' && Number.isFinite(value))
+      ? { valid: true, value }
+      : mismatch(path, 'string or finite number');
+  }
+  if (type.endsWith('?')) {
+    return value === null
+      ? { valid: true, value }
+      : parseModel(value, type.slice(0, -1), path, mode);
+  }
+  if (type === 'boolean') {
+    const decoded = parseBoolean(value, mode);
+    return typeof decoded === 'boolean' ? { valid: true, value: decoded } : mismatch(path, type);
+  }
+  if (type === 'string') {
+    return typeof value === 'string' ? { valid: true, value } : mismatch(path, type);
+  }
+  if (type === 'number') {
+    return typeof value === 'number' && Number.isFinite(value)
+      ? { valid: true, value }
+      : mismatch(path, type);
   }
   const schema = schemas[type];
   if (!schema) throw new Error(`Unknown model schema: ${type}`);
-  if (!isObject(value)) fail(path, type);
-  const result = decodeBooleans ? { ...(value as JsonObject) } : (value as JsonObject);
+  if (!isObject(value)) return mismatch(path, type);
+  const result = { ...value };
   for (const [key, fieldType] of Object.entries(schema)) {
-    const field = (value as JsonObject)[key];
+    const field = value[key];
     if (field !== undefined && field !== null) {
-      try {
-        const decoded = checkModel(
-          field,
-          fieldType,
-          fail,
-          `${path}.${key}`,
-          decodeBooleans,
-          lenient,
-        );
-        if (decodeBooleans) result[key] = decoded as JsonValue;
-      } catch (error) {
-        if (!lenient || !(error instanceof DivessiDecodeError)) throw error;
+      const parsed = parseModel(field, fieldType, `${path}.${key}`, mode);
+      if (parsed.valid) {
+        result[key] = parsed.value;
+      } else if (mode === 'lenient') {
         delete result[key];
+      } else {
+        return parsed;
       }
     }
   }
-  return result;
+  return { valid: true, value: result };
 }
 
 /** Validate modeled fields and retain additional JSON fields without coercing inputs. */
@@ -121,7 +127,8 @@ export function validateModel(
   fail: (field: string, type: string) => never,
   path = '$',
 ): void {
-  checkModel(value, type, fail, path, false);
+  const parsed = parseModel(value, type, path, 'validate');
+  if (!parsed.valid) fail(parsed.field, parsed.expected);
 }
 export function decodeModel<T>(
   value: JsonValue,
@@ -129,16 +136,9 @@ export function decodeModel<T>(
   operation: string,
   validation: ResponseValidation = 'lenient',
 ): T {
-  return checkModel(
-    value,
-    type,
-    (field, expected) => {
-      throw new DivessiDecodeError(operation, field, expected);
-    },
-    '$',
-    true,
-    validation === 'lenient',
-  ) as T;
+  const parsed = parseModel(value, type, '$', validation);
+  if (!parsed.valid) throw new DivessiDecodeError(operation, parsed.field, parsed.expected);
+  return parsed.value as T;
 }
 export function validateInput(
   value: unknown,
