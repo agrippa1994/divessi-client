@@ -1,6 +1,6 @@
 {
   "name": "divessi-client",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Unofficial, portable TypeScript client for the SSI / DiveSSI app API",
   "homepage": "https://github.com/agrippa1994/divessi-client#readme",
   "bugs": "https://github.com/agrippa1994/divessi-client/issues",
