@@ -56,10 +56,10 @@ test('typed dive response preserves envelope and nested records', async () => {
   assert.equal(params.get('lang'), 'eng');
 });
 
-test('malformed modeled response fields are rejected instead of being cast', async () => {
+test('strict mode rejects malformed modeled response fields', async () => {
   const { client } = mock({ logbook_details: [{ odin_user_log_depth_m: 'deep' }] });
   await assert.rejects(
-    client.get_divelog(),
+    client.get_divelog(undefined, { responseValidation: 'strict' }),
     (e) =>
       e instanceof api.DivessiDecodeError &&
       e.field === '$.logbook_details[0].odin_user_log_depth_m',
@@ -97,7 +97,7 @@ test('dive response boolean flags normalize explicit wire encodings and preserve
 test('invalid boolean response encodings retain their decode error path', async () => {
   for (const flag of [2, -1, '', 'yes', 'FALSE', '00', [], {}]) {
     const { client } = mock({ logbook_details: [{ odin_user_log_deleted: flag }] });
-    await assert.rejects(client.get_divelog(), (e) => {
+    await assert.rejects(client.get_divelog(undefined, { responseValidation: 'strict' }), (e) => {
       assert.ok(e instanceof api.DivessiDecodeError);
       assert.equal(e.field, '$.logbook_details[0].odin_user_log_deleted');
       assert.equal(e.expected, 'boolean');
@@ -433,7 +433,10 @@ test('wire decoding preserves legacy empty JSON strings and validates converted 
   });
   assert.equal((await client.get_divelog()).data.logbook_details[0].odin_user_log_depthDataset, '');
   const bad = mock({ logbook_details: [{ odin_user_log_gear: '1,2' }] });
-  await assert.rejects(bad.client.get_divelog(), api.DivessiDecodeError);
+  await assert.rejects(
+    bad.client.get_divelog(undefined, { responseValidation: 'strict' }),
+    api.DivessiDecodeError,
+  );
   const gear = mock([
     {
       gear_images: {
@@ -447,7 +450,10 @@ test('wire decoding preserves legacy empty JSON strings and validates converted 
     { gear_image_url: 'image.jpg' },
   ]);
   const badGear = mock([{ gear_images: { image: [42] } }]);
-  await assert.rejects(badGear.client[operation](), api.DivessiDecodeError);
+  await assert.rejects(
+    badGear.client[operation](undefined, { responseValidation: 'strict' }),
+    api.DivessiDecodeError,
+  );
 });
 
 test('configured API base paths are retained', async () => {
@@ -566,7 +572,7 @@ test('confirmation identifiers still reject boolean and structured values', asyn
   for (const id of [false, true, [], {}]) {
     const { client } = mock({ logbook_details: [{ odin_user_log_user_confirmed_id: id }] });
     await assert.rejects(
-      client.get_divelog(),
+      client.get_divelog(undefined, { responseValidation: 'strict' }),
       (error) =>
         error instanceof api.DivessiDecodeError &&
         error.field === '$.logbook_details[0].odin_user_log_user_confirmed_id' &&
@@ -589,4 +595,74 @@ test('confirmation identifier writes preserve accepted values and reject invalid
     );
   }
   assert.equal(calls.length, 4);
+});
+
+test('lenient defaults keep every dive while omitting incompatible optional fields', async () => {
+  const body = {
+    logbook_details: Array.from({ length: 13 }, (_, index) => ({
+      odin_user_log_nr: index + 1,
+      odin_user_log_var_specialdive_id: index === 12 ? 123 : null,
+      odin_user_log_depth_m: index === 12 ? 'deep' : 10,
+      odin_user_log_deleted: '0',
+      extra: { retained: true },
+    })),
+  };
+  const { client } = mock(body);
+  const response = await client.get_divelog();
+  assert.equal(response.data.logbook_details.length, 13);
+  const last = response.data.logbook_details[12];
+  assert.equal(last.odin_user_log_nr, 13);
+  assert.equal(Object.hasOwn(last, 'odin_user_log_var_specialdive_id'), false);
+  assert.equal(Object.hasOwn(last, 'odin_user_log_depth_m'), false);
+  assert.equal(last.odin_user_log_deleted, false);
+  assert.deepEqual(last.extra, { retained: true });
+  assert.deepEqual(response.rawData, body);
+  assert.equal(response.rawData.logbook_details[12].odin_user_log_var_specialdive_id, 123);
+});
+
+test('lenient decoding applies recursively and skips only invalid array entries', async () => {
+  const { client } = mock({
+    logbook_details: [null, 7, { odin_user_log_nr: 5, odin_user_log_buddy_ids: [1, 'bad', 2] }],
+    logbook_sites: [{ odin_dive_sites_id: 3, odin_dive_sites_name: 123 }],
+  });
+  const { data } = await client.get_divelog();
+  assert.deepEqual(data.logbook_details, [
+    { odin_user_log_nr: 5, odin_user_log_buddy_ids: [1, 2] },
+  ]);
+  assert.deepEqual(data.logbook_sites, [{ odin_dive_sites_id: 3 }]);
+});
+
+test('response mode supports strict opt-in and per-call overrides', async () => {
+  const client = api.createClient({
+    responseValidation: 'strict',
+    fetch: async () => Response.json({ logbook_details: [{ odin_user_log_depth_m: 'deep' }] }),
+  });
+  await assert.rejects(client.get_divelog(), api.DivessiDecodeError);
+  assert.deepEqual((await client.get_divelog(undefined, { responseValidation: 'lenient' })).data, {
+    logbook_details: [{}],
+  });
+  assert.throws(() => api.createClient({ responseValidation: 'disabled' }), TypeError);
+  await assert.rejects(
+    client.get_divelog(undefined, { responseValidation: 'disabled' }),
+    TypeError,
+  );
+});
+
+test('lenient decoding still rejects unusable response envelopes and HTTP failures', async () => {
+  const envelope = mock('unexpected body');
+  await assert.rejects(envelope.client.get_divelog(), api.DivessiDecodeError);
+  const http = mock({ error_message: 'Unavailable' }, 503);
+  await assert.rejects(http.client.get_divelog(), api.DivessiHttpError);
+});
+
+test('custom decoders receive unmodified fields regardless of response mode', async () => {
+  const { client } = mock({ logbook_details: [{ odin_user_log_depth_m: 'deep' }] });
+  const response = await client.get_divelog(undefined, {
+    responseValidation: 'strict',
+    decode(value) {
+      return value.logbook_details[0].odin_user_log_depth_m;
+    },
+  });
+  assert.equal(response.data, 'deep');
+  assert.equal(response.rawData.logbook_details[0].odin_user_log_depth_m, 'deep');
 });

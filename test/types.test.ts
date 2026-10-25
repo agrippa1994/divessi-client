@@ -1,9 +1,20 @@
-import { createClient, get_divelog, login, type JsonValue, type DiveLog } from 'divessi-client';
-const client = createClient({ fetch });
+import {
+  createClient,
+  get_divelog,
+  login,
+  type JsonValue,
+  type DiveLog,
+  type ResponseValidation,
+} from 'divessi-client';
+const mode: ResponseValidation = 'lenient';
+const client = createClient({ fetch, responseValidation: mode });
 async function check() {
   const auth = await login(client, { l: 'user@example.invalid', p: 'password' });
   const token: string | null | undefined = auth.data.token;
-  const dives = await get_divelog(client);
+  const dives = await get_divelog(client, undefined, { responseValidation: 'strict' });
+  const original: JsonValue | undefined = dives.rawData;
+  const emptyDive: DiveLog = {};
+  void [original, emptyDive];
   const depth: number | null | undefined = dives.data.logbook_details?.[0]?.odin_user_log_depth_m;
   const dive: DiveLog = { odin_user_log_depth_m: 22, odin_user_log_date: '2026-10-24' };
   await client.save_divelog({ json_data: dive });

@@ -7,6 +7,8 @@ export interface JsonObject {
 export type JsonString<T> = string & { readonly __jsonValue?: T };
 export type QueryValue = string | number | boolean | null | undefined;
 export type Decoder<T> = (value: JsonValue) => T;
+/** Lenient decoding omits incompatible optional fields; strict decoding rejects them. */
+export type ResponseValidation = 'lenient' | 'strict';
 
 /** Minimal fetch surface; no Node, Bun, or React Native imports are required. */
 export interface FetchResponse {
@@ -53,6 +55,8 @@ export interface ClientMetadata {
   brand?: string;
 }
 export interface ClientOptions {
+  /** Default: lenient. Incompatible optional response fields are omitted instead of rejecting the response. */
+  responseValidation?: ResponseValidation;
   /** Default: Dart/3.12 (dart:io), required by SSI. Null lets the fetch runtime choose its User-Agent. */
   userAgent?: string | null;
   /** Default request headers; per-call headers take precedence, case-insensitively. */
@@ -69,6 +73,8 @@ export interface ClientOptions {
   onTokenChange?: (token: string | undefined) => void;
 }
 export interface CallOptions<T> {
+  /** Override response validation for this call. Custom decoders control their own validation. */
+  responseValidation?: ResponseValidation;
   /** Cancellation signal passed to the underlying fetch implementation. */
   signal?: AbortSignal;
   /** Null explicitly omits a stored token for this call. */
@@ -81,6 +87,8 @@ export interface CallOptions<T> {
   decode?: Decoder<T>;
 }
 export interface ApiResponse<T> {
+  /** Original parsed body for JSON operations, including fields omitted by lenient decoding. Absent for binary downloads. */
+  rawData?: JsonValue;
   /** Decoded response body, or raw bytes for a binary operation. */
   data: T;
   /** HTTP response status code. */

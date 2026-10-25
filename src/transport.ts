@@ -10,6 +10,7 @@ import type {
   JsonValue,
   OperationSpec,
   QueryValue,
+  ResponseValidation,
 } from './types.js';
 
 const metadataKeys: readonly (keyof ClientMetadata)[] = [
@@ -73,6 +74,13 @@ function metadataQuery(metadata: ClientMetadata): Record<string, QueryValue> {
   return result;
 }
 
+function responseValidationMode(value: unknown): ResponseValidation {
+  const mode = value ?? 'lenient';
+  if (mode !== 'lenient' && mode !== 'strict')
+    throw new TypeError('responseValidation must be lenient or strict');
+  return mode;
+}
+
 export class Transport {
   private token: string | undefined;
   private readonly fetcher: FetchLike;
@@ -80,7 +88,9 @@ export class Transport {
   private readonly metadata: ClientMetadata;
   private readonly onTokenChange: ClientOptions['onTokenChange'];
   private readonly defaultHeaders: Record<string, string>;
+  private readonly responseValidation: ResponseValidation;
   constructor(options: ClientOptions = {}) {
+    this.responseValidation = responseValidationMode(options.responseValidation);
     this.defaultHeaders = {};
     const userAgent = options.userAgent === undefined ? CLIENT_USER_AGENT : options.userAgent;
     if (userAgent !== null) mergeHeaders(this.defaultHeaders, { 'user-agent': userAgent });
@@ -126,6 +136,9 @@ export class Transport {
     input: object | undefined,
     options: CallOptions<T> = {},
   ): Promise<ApiResponse<T>> {
+    const validation = responseValidationMode(
+      options.responseValidation ?? this.responseValidation,
+    );
     if (spec.binary && options.decode)
       throw new TypeError('JSON decoders cannot be used on binary downloads');
     if (input !== undefined && !isObject(input))
@@ -214,16 +227,19 @@ export class Transport {
       }
     }
     if (!success) throw new DivessiHttpError(name, response.status, data);
-    const decoded = options.decode ? options.decode(data) : decodeModel<T>(data, spec.output, name);
+    const decoded = options.decode
+      ? options.decode(data)
+      : decodeModel<T>(data, spec.output, name, validation);
+    const session = options.decode ? data : decoded;
     if (
       name === 'login' &&
-      isObject(data) &&
-      data.authenticated === true &&
-      typeof data.token === 'string' &&
-      data.token.length
+      isObject(session) &&
+      session.authenticated === true &&
+      typeof session.token === 'string' &&
+      session.token.length
     ) {
-      this.setToken(data.token);
+      this.setToken(session.token);
     }
-    return { data: decoded, status: response.status, headers: responseHeaders };
+    return { data: decoded, rawData: data, status: response.status, headers: responseHeaders };
   }
 }

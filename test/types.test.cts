@@ -1,5 +1,5 @@
 import api = require('divessi-client');
-const client = api.createClient();
+const client = api.createClient({ responseValidation: 'lenient' });
 async function check() {
   const result = await client.get_divelog();
   const depth: number | null | undefined = result.data.logbook_details?.[0]?.odin_user_log_depth_m;

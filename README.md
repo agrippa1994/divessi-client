@@ -7,7 +7,7 @@ Independent project. Not affiliated with, endorsed by, or supported by Scuba Sch
 - 36 operations, with descriptive names and API-action aliases.
 - No runtime dependencies; uses standard `fetch` or a compatible implementation you supply.
 - ESM and CommonJS builds with TypeScript declarations.
-- Sparse response validation, JSON-field codecs, cancellation, and isolated in-memory sessions.
+- Lenient response decoding by default, optional strict validation, JSON-field codecs, cancellation, and isolated in-memory sessions.
 
 This is an unofficial, statically described interface. The public site ZIP and invalid-token logbook responses have been checked against the live service; successful account operations and writes have not been live-verified. The service can change or restrict access at any time. Only access accounts and data you are authorized to use; this project's license does not grant rights to the service or its content.
 
@@ -95,11 +95,25 @@ const samples = decodeJsonField('DiveLog', 'odin_user_log_depthDataset', '[0,-3.
 const text = encodeJsonField('DiveLog', 'odin_user_log_depthDataset', samples);
 ```
 
-Every operation returns `{ data, status, headers }`. HTTP errors throw `DivessiHttpError`; invalid inputs and incompatible modeled responses throw `DivessiInputError` and `DivessiDecodeError`. Unmodeled business errors remain in the response body. A custom `decode` callback can validate an otherwise untyped response.
+Every operation returns `{ data, status, headers }`. JSON responses also include
+`rawData`, the original parsed body. All model fields are optional. By default,
+response decoding is lenient: incompatible optional fields are omitted from
+`data`, invalid array entries are skipped, and the remaining records are kept.
+Unknown fields and null values are preserved. The unchanged original values
+remain available in `rawData`, including fields omitted from the typed result.
+Use that original snapshot when inspecting discrepancies or preparing a full
+read-modify-write operation; request validation still applies when uploading.
 
-The default response decoder converts modeled boolean flags encoded as `0`, `1`, `"0"`, `"1"`, `"false"`, or `"true"` to booleans. Null and missing fields are preserved; other encodings are rejected. Request fields still require actual booleans. Custom `decode` callbacks receive the original response values.
+Set `responseValidation: 'strict'` in `createClient` or per-call options to
+reject incompatible fields with `DivessiDecodeError`. Lenient decoding still
+rejects unusable top-level response shapes and malformed JSON. HTTP errors
+throw `DivessiHttpError`, and invalid requests throw `DivessiInputError` in
+both modes. Custom `decode` callbacks receive the original body and control
+their own validation. Unmodeled business errors remain in the response body.
 
-Per-call options support `signal`, `headers`, `metadata`, and `token`. Use `token: null` to omit a stored token on a request. Named functions such as `get_divelog(client)` are also exported. See [API.md](./API.md) for the complete operation list. API definitions live in `src/api` and are checked in with the implementation.
+The default response decoder converts modeled boolean flags encoded as `0`, `1`, `"0"`, `"1"`, `"false"`, or `"true"` to booleans. Null and missing fields are preserved. Unsupported encodings are omitted in lenient mode and rejected in strict mode. Request fields still require actual booleans. Custom `decode` callbacks receive the original response values.
+
+Per-call options support `signal`, `headers`, `metadata`, `token`, and `responseValidation`. Use `token: null` to omit a stored token on a request. Named functions such as `get_divelog(client)` are also exported. See [API.md](./API.md) for the complete operation list. API definitions live in `src/api` and are checked in with the implementation.
 
 ## Development and validation
 

@@ -1,6 +1,6 @@
 import { modelSchemas } from './api/model-schemas.js';
 import { DivessiDecodeError, DivessiInputError } from './errors.js';
-import type { JsonObject, JsonValue } from './types.js';
+import type { JsonObject, JsonValue, ResponseValidation } from './types.js';
 
 const schemas: Readonly<Record<string, Readonly<Record<string, string>>>> = modelSchemas;
 export function isObject(value: unknown): value is JsonObject {
@@ -41,6 +41,7 @@ function checkModel(
   fail: (field: string, type: string) => never,
   path: string,
   decodeBooleans: boolean,
+  lenient = false,
 ): unknown {
   // Preserve legacy empty strings on API calls; explicit field codecs check the contents.
   if (type.startsWith('json:')) {
@@ -57,11 +58,17 @@ function checkModel(
   }
   if (type.endsWith('[]')) {
     if (!Array.isArray(value)) fail(path, type);
-    (value as unknown[]).forEach((item, i, items) => {
-      const decoded = checkModel(item, type.slice(0, -2), fail, `${path}[${i}]`, decodeBooleans);
-      if (decodeBooleans) items[i] = decoded;
+    const decoded: unknown[] = [];
+    (value as unknown[]).forEach((item, i) => {
+      try {
+        decoded.push(
+          checkModel(item, type.slice(0, -2), fail, `${path}[${i}]`, decodeBooleans, lenient),
+        );
+      } catch (error) {
+        if (!lenient || !(error instanceof DivessiDecodeError)) throw error;
+      }
     });
-    return value;
+    return decodeBooleans ? decoded : value;
   }
   if (type === 'identifier' || type === 'scalar') {
     if (typeof value !== 'string' && !(typeof value === 'number' && Number.isFinite(value)))
@@ -71,7 +78,7 @@ function checkModel(
   if (type.endsWith('?')) {
     return value === null
       ? value
-      : checkModel(value, type.slice(0, -1), fail, path, decodeBooleans);
+      : checkModel(value, type.slice(0, -1), fail, path, decodeBooleans, lenient);
   }
   if (type === 'boolean' && decodeBooleans) {
     if (value === 0 || value === '0' || value === 'false') return false;
@@ -84,14 +91,27 @@ function checkModel(
   const schema = schemas[type];
   if (!schema) throw new Error(`Unknown model schema: ${type}`);
   if (!isObject(value)) fail(path, type);
+  const result = decodeBooleans ? { ...(value as JsonObject) } : (value as JsonObject);
   for (const [key, fieldType] of Object.entries(schema)) {
     const field = (value as JsonObject)[key];
     if (field !== undefined && field !== null) {
-      const decoded = checkModel(field, fieldType, fail, `${path}.${key}`, decodeBooleans);
-      if (decodeBooleans) (value as Record<string, unknown>)[key] = decoded;
+      try {
+        const decoded = checkModel(
+          field,
+          fieldType,
+          fail,
+          `${path}.${key}`,
+          decodeBooleans,
+          lenient,
+        );
+        if (decodeBooleans) result[key] = decoded as JsonValue;
+      } catch (error) {
+        if (!lenient || !(error instanceof DivessiDecodeError)) throw error;
+        delete result[key];
+      }
     }
   }
-  return value;
+  return result;
 }
 
 /** Validate modeled fields and retain additional JSON fields without coercing inputs. */
@@ -103,7 +123,12 @@ export function validateModel(
 ): void {
   checkModel(value, type, fail, path, false);
 }
-export function decodeModel<T>(value: JsonValue, type: string, operation: string): T {
+export function decodeModel<T>(
+  value: JsonValue,
+  type: string,
+  operation: string,
+  validation: ResponseValidation = 'lenient',
+): T {
   return checkModel(
     value,
     type,
@@ -112,6 +137,7 @@ export function decodeModel<T>(value: JsonValue, type: string, operation: string
     },
     '$',
     true,
+    validation === 'lenient',
   ) as T;
 }
 export function validateInput(
