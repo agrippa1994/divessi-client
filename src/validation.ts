@@ -35,60 +35,84 @@ export function isJson(value: unknown): value is JsonValue {
   return checkJson(value, new Set());
 }
 
-/** Validate modeled fields and retain additional JSON fields. */
-export function validateModel(
+function checkModel(
   value: unknown,
   type: string,
   fail: (field: string, type: string) => never,
-  path = '$',
-): void {
+  path: string,
+  decodeBooleans: boolean,
+): unknown {
   // Preserve legacy empty strings on API calls; explicit field codecs check the contents.
   if (type.startsWith('json:')) {
     if (typeof value !== 'string') fail(path, 'JSON text string');
-    return;
+    return value;
   }
   if (type === 'unknown' || type === 'JsonValue') {
     if (!isJson(value)) fail(path, 'JSON value');
-    return;
+    return value;
   }
   if (type === 'JsonObject') {
     if (!isObject(value) || !isJson(value)) fail(path, 'JSON object');
-    return;
+    return value;
   }
   if (type.endsWith('[]')) {
     if (!Array.isArray(value)) fail(path, type);
-    (value as unknown[]).forEach((item, i) =>
-      validateModel(item, type.slice(0, -2), fail, `${path}[${i}]`),
-    );
-    return;
+    (value as unknown[]).forEach((item, i, items) => {
+      const decoded = checkModel(item, type.slice(0, -2), fail, `${path}[${i}]`, decodeBooleans);
+      if (decodeBooleans) items[i] = decoded;
+    });
+    return value;
   }
   if (type === 'identifier' || type === 'scalar') {
     if (typeof value !== 'string' && !(typeof value === 'number' && Number.isFinite(value)))
       fail(path, 'string or finite number');
-    return;
+    return value;
   }
   if (type.endsWith('?')) {
-    if (value !== null) validateModel(value, type.slice(0, -1), fail, path);
-    return;
+    return value === null
+      ? value
+      : checkModel(value, type.slice(0, -1), fail, path, decodeBooleans);
+  }
+  if (type === 'boolean' && decodeBooleans) {
+    if (value === 0 || value === '0' || value === 'false') return false;
+    if (value === 1 || value === '1' || value === 'true') return true;
   }
   if (type === 'string' || type === 'number' || type === 'boolean') {
     if (typeof value !== type || (type === 'number' && !Number.isFinite(value))) fail(path, type);
-    return;
+    return value;
   }
   const schema = schemas[type];
   if (!schema) throw new Error(`Unknown model schema: ${type}`);
   if (!isObject(value)) fail(path, type);
   for (const [key, fieldType] of Object.entries(schema)) {
     const field = (value as JsonObject)[key];
-    if (field !== undefined && field !== null)
-      validateModel(field, fieldType, fail, `${path}.${key}`);
+    if (field !== undefined && field !== null) {
+      const decoded = checkModel(field, fieldType, fail, `${path}.${key}`, decodeBooleans);
+      if (decodeBooleans) (value as Record<string, unknown>)[key] = decoded;
+    }
   }
+  return value;
+}
+
+/** Validate modeled fields and retain additional JSON fields without coercing inputs. */
+export function validateModel(
+  value: unknown,
+  type: string,
+  fail: (field: string, type: string) => never,
+  path = '$',
+): void {
+  checkModel(value, type, fail, path, false);
 }
 export function decodeModel<T>(value: JsonValue, type: string, operation: string): T {
-  validateModel(value, type, (field, expected) => {
-    throw new DivessiDecodeError(operation, field, expected);
-  });
-  return value as T;
+  return checkModel(
+    value,
+    type,
+    (field, expected) => {
+      throw new DivessiDecodeError(operation, field, expected);
+    },
+    '$',
+    true,
+  ) as T;
 }
 export function validateInput(
   value: unknown,

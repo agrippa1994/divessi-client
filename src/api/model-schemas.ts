@@ -248,7 +248,7 @@ export const modelSchemas = {
     odin_user_log_divecenter_confirmed_logo: 'string',
     odin_user_log_leader_confirmed_id: 'number',
     odin_user_log_leader_confirmed_name: 'string',
-    odin_user_log_user_confirmed_id: 'string',
+    odin_user_log_user_confirmed_id: 'identifier',
     odin_user_log_user_confirmed_name: 'string',
     odin_user_log_xr_planned_bottom_time: 'number',
     odin_user_log_xr_total_deco_time: 'number',

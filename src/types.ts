@@ -29,15 +29,15 @@ export interface FetchRequestInit {
 }
 export type FetchLike = (url: string, init: FetchRequestInit) => Promise<FetchResponse>;
 export interface ClientMetadata {
-  /** App identity selector. No default is supplied. */
+  /** App identity selector. Default: 0815_IOS. */
   ssiapp?: string;
   /** Preferred API language code; omitted during login. */
   lang?: string;
-  /** Combined platform/app version selector. No default is supplied. */
+  /** Combined platform/app version selector. Default: IOS_5.0.43. */
   version?: string;
-  /** Marketing app version. No default is supplied. */
+  /** Marketing app version. Default: 5.0.43. */
   appVersion?: string;
-  /** App context selector. No default is supplied. */
+  /** App context selector. Default: s. */
   context?: string;
   /** Host device/model identifier supplied by the caller. */
   device?: string;
@@ -47,13 +47,13 @@ export interface ClientMetadata {
   manufacturer?: string;
   /** Host operating-system version supplied by the caller. */
   osVersion?: string;
-  /** App platform selector. No default is supplied. */
+  /** App platform selector. Default: IOS. */
   platform?: string;
-  /** App/service brand selector. No default is supplied. */
+  /** App/service brand selector. Default: SSI. */
   brand?: string;
 }
 export interface ClientOptions {
-  /** Default: divessi-client/0.1.0. Null lets the fetch runtime choose its User-Agent. */
+  /** Default: Dart/3.12 (dart:io), required by SSI. Null lets the fetch runtime choose its User-Agent. */
   userAgent?: string | null;
   /** Default request headers; per-call headers take precedence, case-insensitively. */
   headers?: Record<string, string>;

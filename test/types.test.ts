@@ -15,7 +15,16 @@ async function check() {
       },
     })
   ).data;
-  void [token, depth, raw, size];
+  const catalogue: ArrayBuffer = (await client.initialSites()).data;
+  const confirmedId: string | number | null | undefined =
+    dives.data.logbook_details?.[0]?.odin_user_log_user_confirmed_id;
+  await client.save_divelog({ json_data: { odin_user_log_user_confirmed_id: 0 } });
+  await client.save_divelog({ json_data: { odin_user_log_user_confirmed_id: '00123' } });
+  // @ts-expect-error confirmation identifiers cannot be booleans
+  void client.save_divelog({ json_data: { odin_user_log_user_confirmed_id: true } });
+  void [token, depth, raw, size, catalogue, confirmedId];
+  // @ts-expect-error binary downloads cannot use a JSON decoder
+  void client.initialSites(undefined, { decode: () => [] });
   // @ts-expect-error credentials are required
   void client.login({ l: 'user' });
   // @ts-expect-error modeled depth is numeric

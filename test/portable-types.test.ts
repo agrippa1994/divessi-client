@@ -34,6 +34,7 @@ async function check() {
   const response = await client.get_divelog();
   const depth: number | null | undefined =
     response.data.logbook_details?.[0]?.odin_user_log_depth_m;
-  void depth;
+  const catalogue: ArrayBuffer = (await client.initialSites()).data;
+  void [depth, catalogue];
 }
 void check;

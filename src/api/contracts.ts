@@ -26,6 +26,10 @@ import type {
 
 export type Identifier = string | number;
 
+export type InitialSitesInput = undefined;
+
+export type InitialSitesOutput = ArrayBuffer;
+
 export type AchievementsInput = undefined;
 
 export type BuddiesInput = undefined;
@@ -249,6 +253,7 @@ export type NewEmailUploadOutput = JsonValue;
 export type NewPasswordUploadOutput = JsonValue;
 
 export interface OperationInputs {
+  initialSites: InitialSitesInput;
   achievements: AchievementsInput;
   buddies: BuddiesInput;
   buddiesSearch: BuddiesSearchInput;
@@ -287,6 +292,7 @@ export interface OperationInputs {
 }
 
 export interface OperationOutputs {
+  initialSites: InitialSitesOutput;
   achievements: AchievementsOutput;
   buddies: BuddiesOutput;
   buddiesSearch: BuddiesSearchOutput;

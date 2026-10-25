@@ -25,7 +25,8 @@ const metadataKeys: readonly (keyof ClientMetadata)[] = [
   'platform',
   'brand',
 ];
-export const CLIENT_USER_AGENT = 'divessi-client/0.1.0';
+// SSI requires its native client identity even for authenticated logbook reads.
+export const CLIENT_USER_AGENT = 'Dart/3.12 (dart:io)';
 function mergeHeaders(
   target: Record<string, string>,
   source: Record<string, string> | undefined,
@@ -89,7 +90,15 @@ export class Transport {
       throw new TypeError('A fetch implementation must be supplied in this runtime');
     this.fetcher = fetcher.bind(globalThis) as FetchLike;
     this.apiBase = baseUrl(options.apiBaseUrl ?? 'https://api.divessi.com/app');
-    this.metadata = { ...options.metadata };
+    this.metadata = {
+      ssiapp: '0815_IOS',
+      version: 'IOS_5.0.43',
+      appVersion: '5.0.43',
+      platform: 'IOS',
+      context: 's',
+      brand: 'SSI',
+      ...options.metadata,
+    };
     metadataQuery(this.metadata);
     this.onTokenChange = options.onTokenChange;
     this.setTokenValue(options.token, false);

@@ -498,8 +498,8 @@ export interface DiveLog {
   odin_user_log_leader_confirmed_id?: number | null;
   /** Dive log leader confirmed name. */
   odin_user_log_leader_confirmed_name?: string | null;
-  /** User confirmed identifier for this record. */
-  odin_user_log_user_confirmed_id?: string | null;
+  /** User confirmed identifier. SSI may encode this as a string or a number; preserve its wire value. */
+  odin_user_log_user_confirmed_id?: string | number | null;
   /** Dive log user confirmed name. */
   odin_user_log_user_confirmed_name?: string | null;
   /** Dive log xr planned bottom time. */
