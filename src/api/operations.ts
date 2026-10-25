@@ -1,6 +1,19 @@
 import type { OperationSpec } from '../types.js';
 
 export const operations = {
+  initialSites: {
+    method: 'GET',
+    path: '/APP_CACHE_SITES.zip',
+    service: 'api',
+    query: [],
+    body: [],
+    defaults: {},
+    required: [],
+    inputTypes: {},
+    output: 'ArrayBuffer',
+    auth: 'none',
+    binary: true,
+  },
   achievements: {
     method: 'GET',
     path: '/a21.php',
@@ -521,6 +534,7 @@ export const operations = {
 } as const satisfies Record<string, OperationSpec>;
 
 export const operationAliases = {
+  initialSites: 'initialSites',
   achievements: 'achievements',
   buddies: 'buddies',
   buddiesSearch: 'buddiesSearch',

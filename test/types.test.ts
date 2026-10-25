@@ -1,9 +1,25 @@
-import { createClient, get_divelog, login, type JsonValue, type DiveLog } from 'divessi-client';
-const client = createClient({ fetch });
+import {
+  createClient,
+  get_divelog,
+  login,
+  type JsonValue,
+  type DiveLog,
+  type Buddy,
+  type ResponseValidation,
+} from 'divessi-client';
+const mode: ResponseValidation = 'lenient';
+const client = createClient({ fetch, responseValidation: mode });
 async function check() {
   const auth = await login(client, { l: 'user@example.invalid', p: 'password' });
   const token: string | null | undefined = auth.data.token;
-  const dives = await get_divelog(client);
+  const dives = await get_divelog(client, undefined, { responseValidation: 'strict' });
+  const buddies: Buddy[] | null | undefined = dives.data.logbook_buddies;
+  const leader: string | number | null | undefined = buddies?.[0]?.leader_nr;
+  const city: string | null | undefined = buddies?.[0]?.city;
+  void [buddies, leader, city];
+  const original: JsonValue | undefined = dives.rawData;
+  const emptyDive: DiveLog = {};
+  void [original, emptyDive];
   const depth: number | null | undefined = dives.data.logbook_details?.[0]?.odin_user_log_depth_m;
   const dive: DiveLog = { odin_user_log_depth_m: 22, odin_user_log_date: '2026-10-24' };
   await client.save_divelog({ json_data: dive });
@@ -15,7 +31,16 @@ async function check() {
       },
     })
   ).data;
-  void [token, depth, raw, size];
+  const catalogue: ArrayBuffer = (await client.initialSites()).data;
+  const confirmedId: string | number | null | undefined =
+    dives.data.logbook_details?.[0]?.odin_user_log_user_confirmed_id;
+  await client.save_divelog({ json_data: { odin_user_log_user_confirmed_id: 0 } });
+  await client.save_divelog({ json_data: { odin_user_log_user_confirmed_id: '00123' } });
+  // @ts-expect-error confirmation identifiers cannot be booleans
+  void client.save_divelog({ json_data: { odin_user_log_user_confirmed_id: true } });
+  void [token, depth, raw, size, catalogue, confirmedId];
+  // @ts-expect-error binary downloads cannot use a JSON decoder
+  void client.initialSites(undefined, { decode: () => [] });
   // @ts-expect-error credentials are required
   void client.login({ l: 'user' });
   // @ts-expect-error modeled depth is numeric

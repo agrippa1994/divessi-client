@@ -10,6 +10,7 @@ import type {
   JsonValue,
   OperationSpec,
   QueryValue,
+  ResponseValidation,
 } from './types.js';
 
 const metadataKeys: readonly (keyof ClientMetadata)[] = [
@@ -25,7 +26,8 @@ const metadataKeys: readonly (keyof ClientMetadata)[] = [
   'platform',
   'brand',
 ];
-export const CLIENT_USER_AGENT = 'divessi-client/0.1.0';
+// SSI requires its native client identity even for authenticated logbook reads.
+export const CLIENT_USER_AGENT = 'Dart/3.12 (dart:io)';
 function mergeHeaders(
   target: Record<string, string>,
   source: Record<string, string> | undefined,
@@ -72,6 +74,24 @@ function metadataQuery(metadata: ClientMetadata): Record<string, QueryValue> {
   return result;
 }
 
+function copyJson(value: JsonValue): JsonValue {
+  if (Array.isArray(value)) return value.map(copyJson);
+  if (!isObject(value)) return value;
+  return Object.fromEntries(
+    Object.entries(value).map(([key, item]) => [
+      key,
+      item === undefined ? undefined : copyJson(item),
+    ]),
+  );
+}
+
+function responseValidationMode(value: unknown): ResponseValidation {
+  const mode = value ?? 'lenient';
+  if (mode !== 'lenient' && mode !== 'strict')
+    throw new TypeError('responseValidation must be lenient or strict');
+  return mode;
+}
+
 export class Transport {
   private token: string | undefined;
   private readonly fetcher: FetchLike;
@@ -79,7 +99,9 @@ export class Transport {
   private readonly metadata: ClientMetadata;
   private readonly onTokenChange: ClientOptions['onTokenChange'];
   private readonly defaultHeaders: Record<string, string>;
+  private readonly responseValidation: ResponseValidation;
   constructor(options: ClientOptions = {}) {
+    this.responseValidation = responseValidationMode(options.responseValidation);
     this.defaultHeaders = {};
     const userAgent = options.userAgent === undefined ? CLIENT_USER_AGENT : options.userAgent;
     if (userAgent !== null) mergeHeaders(this.defaultHeaders, { 'user-agent': userAgent });
@@ -89,7 +111,15 @@ export class Transport {
       throw new TypeError('A fetch implementation must be supplied in this runtime');
     this.fetcher = fetcher.bind(globalThis) as FetchLike;
     this.apiBase = baseUrl(options.apiBaseUrl ?? 'https://api.divessi.com/app');
-    this.metadata = { ...options.metadata };
+    this.metadata = {
+      ssiapp: '0815_IOS',
+      version: 'IOS_5.0.43',
+      appVersion: '5.0.43',
+      platform: 'IOS',
+      context: 's',
+      brand: 'SSI',
+      ...options.metadata,
+    };
     metadataQuery(this.metadata);
     this.onTokenChange = options.onTokenChange;
     this.setTokenValue(options.token, false);
@@ -117,6 +147,9 @@ export class Transport {
     input: object | undefined,
     options: CallOptions<T> = {},
   ): Promise<ApiResponse<T>> {
+    const validation = responseValidationMode(
+      options.responseValidation ?? this.responseValidation,
+    );
     if (spec.binary && options.decode)
       throw new TypeError('JSON decoders cannot be used on binary downloads');
     if (input !== undefined && !isObject(input))
@@ -205,16 +238,21 @@ export class Transport {
       }
     }
     if (!success) throw new DivessiHttpError(name, response.status, data);
-    const decoded = options.decode ? options.decode(data) : decodeModel<T>(data, spec.output, name);
+    // Decoders own this copy; rawData retains the original parsed response.
+    const decodeInput = copyJson(data);
+    const decoded = options.decode
+      ? options.decode(decodeInput)
+      : decodeModel<T>(decodeInput, spec.output, name, validation);
+    const session = options.decode ? decodeInput : decoded;
     if (
       name === 'login' &&
-      isObject(data) &&
-      data.authenticated === true &&
-      typeof data.token === 'string' &&
-      data.token.length
+      isObject(session) &&
+      session.authenticated === true &&
+      typeof session.token === 'string' &&
+      session.token.length
     ) {
-      this.setToken(data.token);
+      this.setToken(session.token);
     }
-    return { data: decoded, status: response.status, headers: responseHeaders };
+    return { data: decoded, rawData: data, status: response.status, headers: responseHeaders };
   }
 }

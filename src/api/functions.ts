@@ -1,5 +1,6 @@
 import { operation } from '../operation.js';
 
+export const initialSites = operation('initialSites');
 export const achievements = operation('achievements');
 export const buddies = operation('buddies');
 export const buddiesSearch = operation('buddiesSearch');

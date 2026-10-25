@@ -1,11 +1,12 @@
 # API reference
 
-The client exposes 35 account, logbook, profile, buddy, equipment, and dive-site operations. Every operation has a method on the client and a standalone named export.
+The client exposes 36 account, logbook, profile, buddy, equipment, and dive-site operations. Every operation has a method on the client and a standalone named export.
 
 ## Operations
 
 | Function                 | API-action alias          | Required input fields | Response model         |
 | ------------------------ | ------------------------- | --------------------- | ---------------------- |
+| `initialSites`           | `/APP_CACHE_SITES.zip`    | —                     | `ArrayBuffer`          |
 | `achievements`           | `get_user_badges`         | —                     | `JsonValue`            |
 | `buddies`                | `get_buddies`             | —                     | `BuddiesResponse`      |
 | `buddiesSearch`          | `search_buddy`            | `string`              | `JsonValue`            |
@@ -48,6 +49,15 @@ For image writes, `save_image` dispatches to the appropriate typed operation for
 
 The declarations in `src/api/contracts.ts` describe operation inputs and outputs. `src/api/models.ts` defines sparse wire models: fields can be missing or null, and additional JSON properties are preserved. `JsonValue` marks responses or fields without a narrower contract. See [FIELD-GUIDE.md](./FIELD-GUIDE.md) for descriptions of every named model field and request input field; these descriptions are also included in the TypeScript declarations.
 
+All data-model fields are optional. Response validation defaults to `lenient`:
+incompatible optional fields are omitted from `data`, invalid array entries are
+skipped, and other records and unknown fields are retained. JSON responses also
+include the original parsed body in `rawData`, so omitted values are available
+without pretending they satisfy the declared field types. Set
+`responseValidation: 'strict'` on the client or a call to reject mismatches.
+Invalid top-level response shapes, malformed JSON, and HTTP failures remain
+errors. Custom decoders receive the original body and control their own checks.
+
 Request validation checks parameter names and modeled value types. It does not prove which inner fields the server requires, whether a caller is authorized, or whether a business operation succeeded. Inspect the response and confirm writes by reading the affected record.
 
 ## Encoded JSON fields
@@ -60,6 +70,6 @@ The default base URL is `https://api.divessi.com/app`. `apiBaseUrl` can override
 
 Login credentials and session tokens are query parameters; redact URLs in logs. Sessions are isolated per client. Login stores a token only when the response declares successful authentication and contains a nonempty token.
 
-Per-request options accept an abort signal, headers, metadata, a token override, and a custom validating decoder. `token: null` omits the stored token. `headers` are merged case-insensitively; the transport controls form Content-Type. Failed requests are not retried automatically.
+Per-request options accept an abort signal, headers, metadata, a token override, `responseValidation`, and a custom validating decoder. `token: null` omits the stored token. `headers` are merged case-insensitively; the transport controls form Content-Type. Failed requests are not retried automatically.
 
-The default User-Agent is `divessi-client/0.1.0`. Metadata defaults are empty. Live compatibility, server permissions, and complete server schemas are not guaranteed.
+The default User-Agent is `Dart/3.12 (dart:io)`. Metadata defaults identify SSI iOS 5.0.43 (`ssiapp=0815_IOS`, `version=IOS_5.0.43`, `appVersion=5.0.43`, `platform=IOS`, `context=s`, `brand=SSI`). Callers can override these values. The public catalogue and invalid-token logbook responses have been live-checked; successful account operations, writes, and complete server schemas remain unverified.

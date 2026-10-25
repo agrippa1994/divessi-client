@@ -10,6 +10,7 @@ export type {
   ClientOptions,
   ClientMetadata,
   Decoder,
+  ResponseValidation,
   FetchLike,
   FetchRequestInit,
   FetchResponse,

@@ -7,6 +7,8 @@ export interface JsonObject {
 export type JsonString<T> = string & { readonly __jsonValue?: T };
 export type QueryValue = string | number | boolean | null | undefined;
 export type Decoder<T> = (value: JsonValue) => T;
+/** Lenient decoding omits incompatible optional fields; strict decoding rejects them. */
+export type ResponseValidation = 'lenient' | 'strict';
 
 /** Minimal fetch surface; no Node, Bun, or React Native imports are required. */
 export interface FetchResponse {
@@ -29,15 +31,15 @@ export interface FetchRequestInit {
 }
 export type FetchLike = (url: string, init: FetchRequestInit) => Promise<FetchResponse>;
 export interface ClientMetadata {
-  /** App identity selector. No default is supplied. */
+  /** App identity selector. Default: 0815_IOS. */
   ssiapp?: string;
   /** Preferred API language code; omitted during login. */
   lang?: string;
-  /** Combined platform/app version selector. No default is supplied. */
+  /** Combined platform/app version selector. Default: IOS_5.0.43. */
   version?: string;
-  /** Marketing app version. No default is supplied. */
+  /** Marketing app version. Default: 5.0.43. */
   appVersion?: string;
-  /** App context selector. No default is supplied. */
+  /** App context selector. Default: s. */
   context?: string;
   /** Host device/model identifier supplied by the caller. */
   device?: string;
@@ -47,13 +49,15 @@ export interface ClientMetadata {
   manufacturer?: string;
   /** Host operating-system version supplied by the caller. */
   osVersion?: string;
-  /** App platform selector. No default is supplied. */
+  /** App platform selector. Default: IOS. */
   platform?: string;
-  /** App/service brand selector. No default is supplied. */
+  /** App/service brand selector. Default: SSI. */
   brand?: string;
 }
 export interface ClientOptions {
-  /** Default: divessi-client/0.1.0. Null lets the fetch runtime choose its User-Agent. */
+  /** Default: lenient. Incompatible optional response fields are omitted instead of rejecting the response. */
+  responseValidation?: ResponseValidation;
+  /** Default: Dart/3.12 (dart:io), required by SSI. Null lets the fetch runtime choose its User-Agent. */
   userAgent?: string | null;
   /** Default request headers; per-call headers take precedence, case-insensitively. */
   headers?: Record<string, string>;
@@ -69,6 +73,8 @@ export interface ClientOptions {
   onTokenChange?: (token: string | undefined) => void;
 }
 export interface CallOptions<T> {
+  /** Override response validation for this call. Custom decoders control their own validation. */
+  responseValidation?: ResponseValidation;
   /** Cancellation signal passed to the underlying fetch implementation. */
   signal?: AbortSignal;
   /** Null explicitly omits a stored token for this call. */
@@ -77,10 +83,12 @@ export interface CallOptions<T> {
   metadata?: ClientMetadata;
   /** Request-header overrides, matched case-insensitively. Form Content-Type remains controlled by the transport. */
   headers?: Record<string, string>;
-  /** Validate/transform the raw response yourself; the inferred result type follows this function. */
+  /** Validate/transform an independent copy of the raw response; the inferred result type follows this function. */
   decode?: Decoder<T>;
 }
 export interface ApiResponse<T> {
+  /** Independent original parsed body for JSON operations, including fields omitted by lenient decoding. Absent for binary downloads. */
+  rawData?: JsonValue;
   /** Decoded response body, or raw bytes for a binary operation. */
   data: T;
   /** HTTP response status code. */

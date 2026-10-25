@@ -26,7 +26,7 @@ declare const nativeFetch: (
   arrayBuffer(): Promise<ArrayBuffer>;
 }>;
 const compatible: FetchLike = nativeFetch;
-const client = createClient({ fetch: compatible });
+const client = createClient({ fetch: compatible, responseValidation: 'lenient' });
 const records: DiveRecord[] = decodeJsonField('DiveLog', 'odin_user_log_diveSamples', '[]');
 const text: string = encodeJsonField('DiveLog', 'odin_user_log_diveSamples', records);
 void text;
@@ -34,6 +34,7 @@ async function check() {
   const response = await client.get_divelog();
   const depth: number | null | undefined =
     response.data.logbook_details?.[0]?.odin_user_log_depth_m;
-  void depth;
+  const catalogue: ArrayBuffer = (await client.initialSites()).data;
+  void [depth, catalogue];
 }
 void check;

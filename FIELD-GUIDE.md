@@ -56,29 +56,32 @@ JsonString<T> is a string containing JSON for T. Use decodeJsonField and encodeJ
 
 ## Buddy
 
-| Field           | Type                | Description                                                        |
-| --------------- | ------------------- | ------------------------------------------------------------------ |
-| `internalPk`    | `number \| null`    | Primary key in the app’s local database; not a server identifier.  |
-| `id`            | `number \| null`    | Record identifier.                                                 |
-| `localRefId`    | `number \| null`    | Local reference used before a server identifier is available.      |
-| `address`       | `string \| null`    | Postal address.                                                    |
-| `dob`           | `JsonValue \| null` | Date of birth; date encoding is unspecified.                       |
-| `comment`       | `string \| null`    | Free-text comment.                                                 |
-| `added`         | `JsonValue \| null` | Date the record was added; wire date encoding is unspecified.      |
-| `email`         | `string \| null`    | Email address.                                                     |
-| `firstname`     | `string \| null`    | Given name.                                                        |
-| `gender`        | `number \| null`    | Gender code; allowed values are unspecified.                       |
-| `image`         | `string \| null`    | Image reference; URL/path conventions depend on this model.        |
-| `lastname`      | `string \| null`    | Family name.                                                       |
-| `leader_nr`     | `number \| null`    | Buddy’s leader/instructor registration number.                     |
-| `leader_active` | `boolean \| null`   | Whether the buddy’s leader/instructor status is active.            |
-| `master_id`     | `number \| null`    | Master user identifier for the linked buddy.                       |
-| `nickname`      | `string \| null`    | Preferred display nickname.                                        |
-| `phone`         | `string \| null`    | Telephone number.                                                  |
-| `deleted`       | `boolean \| null`   | Deletion marker used by synchronization.                           |
-| `needsUpload`   | `boolean \| null`   | Whether the local record is queued for synchronization.            |
-| `confirmed`     | `boolean \| null`   | Confirmation state; the server’s transition rules are unspecified. |
-| `favorite`      | `boolean \| null`   | Whether marked as a favorite.                                      |
+| Field           | Type                       | Description                                                                                |
+| --------------- | -------------------------- | ------------------------------------------------------------------------------------------ |
+| `internalPk`    | `number \| null`           | Primary key in the app’s local database; not a server identifier.                          |
+| `id`            | `number \| null`           | Record identifier.                                                                         |
+| `localRefId`    | `number \| null`           | Local reference used before a server identifier is available.                              |
+| `address`       | `string \| null`           | Postal address.                                                                            |
+| `city`          | `string \| null`           | City returned with a logbook buddy.                                                        |
+| `country`       | `string \| null`           | Country code or display name returned with a logbook buddy.                                |
+| `dob`           | `JsonValue \| null`        | Date of birth; date encoding is unspecified.                                               |
+| `comment`       | `string \| null`           | Free-text comment.                                                                         |
+| `added`         | `JsonValue \| null`        | Date the record was added; wire date encoding is unspecified.                              |
+| `email`         | `string \| null`           | Email address.                                                                             |
+| `firstname`     | `string \| null`           | Given name.                                                                                |
+| `forename`      | `string \| null`           | Alternate given-name field returned with a logbook buddy.                                  |
+| `gender`        | `number \| null`           | Gender code; allowed values are unspecified.                                               |
+| `image`         | `string \| null`           | Image reference; URL/path conventions depend on this model.                                |
+| `lastname`      | `string \| null`           | Family name.                                                                               |
+| `leader_nr`     | `string \| number \| null` | Buddy’s leader/instructor registration number; string and numeric encodings are preserved. |
+| `leader_active` | `boolean \| null`          | Whether the buddy’s leader/instructor status is active.                                    |
+| `master_id`     | `number \| null`           | Master user identifier for the linked buddy.                                               |
+| `nickname`      | `string \| null`           | Preferred display nickname.                                                                |
+| `phone`         | `string \| null`           | Telephone number.                                                                          |
+| `deleted`       | `boolean \| null`          | Deletion marker used by synchronization.                                                   |
+| `needsUpload`   | `boolean \| null`          | Whether the local record is queued for synchronization.                                    |
+| `confirmed`     | `boolean \| null`          | Confirmation state; the server’s transition rules are unspecified.                         |
+| `favorite`      | `boolean \| null`          | Whether marked as a favorite.                                                              |
 
 ## BuddyUploadResponse
 
@@ -330,7 +333,7 @@ JsonString<T> is a string containing JSON for T. Use decodeJsonField and encodeJ
 | `odin_user_log_divecenter_confirmed_logo`             | `string \| null`                             | Dive log divecenter confirmed logo.                                                                                                                                                                                          |
 | `odin_user_log_leader_confirmed_id`                   | `number \| null`                             | Leader confirmed identifier for this record.                                                                                                                                                                                 |
 | `odin_user_log_leader_confirmed_name`                 | `string \| null`                             | Dive log leader confirmed name.                                                                                                                                                                                              |
-| `odin_user_log_user_confirmed_id`                     | `string \| null`                             | User confirmed identifier for this record.                                                                                                                                                                                   |
+| `odin_user_log_user_confirmed_id`                     | `string \| number \| null`                   | User confirmed identifier; string and numeric encodings are preserved.                                                                                                                                                       |
 | `odin_user_log_user_confirmed_name`                   | `string \| null`                             | Dive log user confirmed name.                                                                                                                                                                                                |
 | `odin_user_log_xr_planned_bottom_time`                | `number \| null`                             | Dive log xr planned bottom time.                                                                                                                                                                                             |
 | `odin_user_log_xr_total_deco_time`                    | `number \| null`                             | Dive log xr total deco time. Expressed in minutes.                                                                                                                                                                           |
@@ -620,6 +623,7 @@ JsonString<T> is a string containing JSON for T. Use decodeJsonField and encodeJ
 | `logbook_history` | `JsonValue \| null` | Logbook history/summary data; nested shape is unspecified. |
 | `logbook_details` | `DiveLog[] \| null` | Dive-log records returned for the account.                 |
 | `logbook_sites`   | `Site[] \| null`    | Dive-site records associated with the returned logs.       |
+| `logbook_buddies` | `Buddy[] \| null`   | Buddy records included with the logbook.                   |
 
 ## EmergencyContact
 

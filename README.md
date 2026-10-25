@@ -4,12 +4,12 @@ Unofficial TypeScript client for personal logbook, profile, buddy, equipment, an
 
 Independent project. Not affiliated with, endorsed by, or supported by Scuba Schools International or HEAD Watersports. SSI, DiveSSI, and MySSI names identify the compatible service and belong to their respective owners.
 
-- 35 operations, with descriptive names and API-action aliases.
+- 36 operations, with descriptive names and API-action aliases.
 - No runtime dependencies; uses standard `fetch` or a compatible implementation you supply.
 - ESM and CommonJS builds with TypeScript declarations.
-- Sparse response validation, JSON-field codecs, cancellation, and isolated in-memory sessions.
+- Lenient response decoding by default, optional strict validation, JSON-field codecs, cancellation, and isolated in-memory sessions.
 
-This is an unofficial, statically described interface. Server behavior and acceptance of these requests have not been verified against the live service. The service can change or restrict access at any time. Only access accounts and data you are authorized to use; this project's license does not grant rights to the service or its content.
+This is an unofficial, statically described interface. The public site ZIP and invalid-token logbook responses have been checked against the live service; successful account operations and writes have not been live-verified. The service can change or restrict access at any time. Only access accounts and data you are authorized to use; this project's license does not grant rights to the service or its content.
 
 ## Build and install
 
@@ -51,7 +51,14 @@ Successful login stores the returned token in that client instance. `getToken()`
 
 The API uses query parameters for login credentials and session tokens. Avoid logging full request URLs, and redact them in monitoring and error reporting. Keep persisted tokens in storage appropriate to your application.
 
-Requests identify this library with `User-Agent: divessi-client/0.1.0`; no native-app identity values are supplied by default. `userAgent: null` lets the fetch runtime choose its own header. Some runtimes override User-Agent. Additional metadata is optional and caller-supplied; server requirements are not guaranteed.
+Requests default to the SSI client identity needed by the service: `User-Agent: Dart/3.12 (dart:io)`, `ssiapp=0815_IOS`, `version=IOS_5.0.43`, `appVersion=5.0.43`, `platform=IOS`, `context=s`, and `brand=SSI`. Without app identity metadata, an invalid-token logbook read returns HTTP 404 rather than SSI’s authentication refusal. All defaults are configurable through `metadata` and `userAgent`; `userAgent: null` lets the fetch runtime choose its header. Some runtimes override User-Agent.
+
+## Download the dive-site catalogue
+
+`client.initialSites(undefined, { signal })` downloads `/APP_CACHE_SITES.zip`
+without a session token and returns `ApiResponse<ArrayBuffer>`. The standalone
+`initialSites(client)` export is equivalent. Unzip and cache these bytes in your
+application; the client does not depend on a filesystem or ZIP library.
 
 ## Update a dive
 
@@ -88,9 +95,27 @@ const samples = decodeJsonField('DiveLog', 'odin_user_log_depthDataset', '[0,-3.
 const text = encodeJsonField('DiveLog', 'odin_user_log_depthDataset', samples);
 ```
 
-Every operation returns `{ data, status, headers }`. HTTP errors throw `DivessiHttpError`; invalid inputs and incompatible modeled responses throw `DivessiInputError` and `DivessiDecodeError`. Unmodeled business errors remain in the response body. A custom `decode` callback can validate an otherwise untyped response.
+Every operation returns `{ data, status, headers }`. JSON responses also include
+`rawData`, the original parsed body. All model fields are optional. By default,
+response decoding is lenient: incompatible optional fields are omitted from
+`data`, invalid array entries are skipped, and the remaining records are kept.
+Unknown fields and null values are preserved. The unchanged original values
+remain available in `rawData`, including fields omitted from the typed result.
+Decoding uses a separate copy, so edits to `data` and mutations inside custom
+decoders leave `rawData` unchanged.
+Use that original snapshot when inspecting discrepancies or preparing a full
+read-modify-write operation; request validation still applies when uploading.
 
-Per-call options support `signal`, `headers`, `metadata`, and `token`. Use `token: null` to omit a stored token on a request. Named functions such as `get_divelog(client)` are also exported. See [API.md](./API.md) for the complete operation list. API definitions live in `src/api` and are checked in with the implementation.
+Set `responseValidation: 'strict'` in `createClient` or per-call options to
+reject incompatible fields with `DivessiDecodeError`. Lenient decoding still
+rejects unusable top-level response shapes and malformed JSON. HTTP errors
+throw `DivessiHttpError`, and invalid requests throw `DivessiInputError` in
+both modes. Custom `decode` callbacks receive the original body and control
+their own validation. Unmodeled business errors remain in the response body.
+
+The default response decoder converts modeled boolean flags encoded as `0`, `1`, `"0"`, `"1"`, `"false"`, or `"true"` to booleans. Null and missing fields are preserved. Unsupported encodings are omitted in lenient mode and rejected in strict mode. Request fields still require actual booleans. Custom `decode` callbacks receive the original response values.
+
+Per-call options support `signal`, `headers`, `metadata`, `token`, and `responseValidation`. Use `token: null` to omit a stored token on a request. Named functions such as `get_divelog(client)` are also exported. See [API.md](./API.md) for the complete operation list. API definitions live in `src/api` and are checked in with the implementation.
 
 ## Development and validation
 

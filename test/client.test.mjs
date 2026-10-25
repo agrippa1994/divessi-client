@@ -56,14 +56,93 @@ test('typed dive response preserves envelope and nested records', async () => {
   assert.equal(params.get('lang'), 'eng');
 });
 
-test('malformed modeled response fields are rejected instead of being cast', async () => {
+test('strict mode rejects malformed modeled response fields', async () => {
   const { client } = mock({ logbook_details: [{ odin_user_log_depth_m: 'deep' }] });
   await assert.rejects(
-    client.get_divelog(),
+    client.get_divelog(undefined, { responseValidation: 'strict' }),
     (e) =>
       e instanceof api.DivessiDecodeError &&
       e.field === '$.logbook_details[0].odin_user_log_depth_m',
   );
+});
+
+test('dive response boolean flags normalize explicit wire encodings and preserve other fields', async () => {
+  const flags = [false, true, 0, 1, '0', '1', 'false', 'true', null];
+  const expected = [false, true, false, true, false, true, false, true, null];
+  const { client } = mock({
+    logbook_details: [
+      ...flags.map((flag) => ({
+        odin_user_log_deleted: flag,
+        odin_user_log_verified: flag,
+        odin_user_log_nr: 1,
+        odin_user_log_depthDataset: '[0,1]',
+        server_extra: { deleted: '0' },
+      })),
+      {},
+    ],
+  });
+  const { data } = await client.get_divelog();
+  assert.deepEqual(data.logbook_details, [
+    ...expected.map((flag) => ({
+      odin_user_log_deleted: flag,
+      odin_user_log_verified: flag,
+      odin_user_log_nr: 1,
+      odin_user_log_depthDataset: '[0,1]',
+      server_extra: { deleted: '0' },
+    })),
+    {},
+  ]);
+});
+
+test('invalid boolean response encodings retain their decode error path', async () => {
+  for (const flag of [2, -1, '', 'yes', 'FALSE', '00', [], {}]) {
+    const { client } = mock({ logbook_details: [{ odin_user_log_deleted: flag }] });
+    await assert.rejects(client.get_divelog(undefined, { responseValidation: 'strict' }), (e) => {
+      assert.ok(e instanceof api.DivessiDecodeError);
+      assert.equal(e.field, '$.logbook_details[0].odin_user_log_deleted');
+      assert.equal(e.expected, 'boolean');
+      return true;
+    });
+  }
+});
+
+test('response boolean normalization applies to top-level model arrays and login sessions', async () => {
+  const gear = mock([{ gearset_deleted: '0', needsUpload: 1 }]);
+  const operation = Object.entries(api.operations).find(
+    ([, spec]) => spec.output === 'GearSet[]',
+  )[0];
+  assert.deepEqual((await gear.client[operation]()).data, [
+    { gearset_deleted: false, needsUpload: true },
+  ]);
+  const login = mock({ authenticated: '1', token: 'new-session' });
+  assert.equal((await login.client.login({ l: 'user', p: 'pass' })).data.authenticated, true);
+  assert.equal(login.client.getToken(), 'new-session');
+});
+
+test('custom decoders receive the original boolean wire encodings', async () => {
+  const body = { logbook_details: [{ odin_user_log_deleted: '0' }] };
+  const { client } = mock(body);
+  const result = await client.get_divelog(undefined, {
+    decode(value) {
+      assert.deepEqual(value, body);
+      return value.logbook_details[0].odin_user_log_deleted;
+    },
+  });
+  assert.equal(result.data, '0');
+});
+
+test('boolean request fields remain strict and are serialized without coercion', async () => {
+  const { client, calls } = mock({});
+  for (const flag of [0, 1, '0', '1', 'false', 'true']) {
+    const dive = { odin_user_log_deleted: flag };
+    await assert.rejects(client.save_divelog({ json_data: dive }), api.DivessiInputError);
+    assert.equal(dive.odin_user_log_deleted, flag);
+  }
+  assert.equal(calls.length, 0);
+  await client.save_divelog({ json_data: { odin_user_log_deleted: true } });
+  assert.deepEqual(JSON.parse(new URLSearchParams(calls[0].init.body).get('json_data')), {
+    odin_user_log_deleted: true,
+  });
 });
 
 test('save_divelog sends one JSON encoding in a form body and dispatches in query', async () => {
@@ -221,7 +300,7 @@ test('all supported operations have callable named exports and produce transport
       return new Response('{}', { headers: { 'content-type': 'application/json' } });
     },
   });
-  assert.equal(Object.keys(api.operations).length, 35);
+  assert.equal(Object.keys(api.operations).length, 36);
   for (const [alias, key] of Object.entries(api.operationAliases)) {
     assert.equal(typeof api[alias], 'function', alias);
     assert.equal(typeof client[alias], 'function', alias);
@@ -252,7 +331,7 @@ test('all supported operations have callable named exports and produce transport
     });
     await api[key](transport, Object.keys(spec.inputTypes).length ? input : undefined);
   }
-  assert.equal(calls, 35);
+  assert.equal(calls, 36);
 });
 
 test('CommonJS entry is usable independently of the ESM entry', async () => {
@@ -354,7 +433,10 @@ test('wire decoding preserves legacy empty JSON strings and validates converted 
   });
   assert.equal((await client.get_divelog()).data.logbook_details[0].odin_user_log_depthDataset, '');
   const bad = mock({ logbook_details: [{ odin_user_log_gear: '1,2' }] });
-  await assert.rejects(bad.client.get_divelog(), api.DivessiDecodeError);
+  await assert.rejects(
+    bad.client.get_divelog(undefined, { responseValidation: 'strict' }),
+    api.DivessiDecodeError,
+  );
   const gear = mock([
     {
       gear_images: {
@@ -368,7 +450,10 @@ test('wire decoding preserves legacy empty JSON strings and validates converted 
     { gear_image_url: 'image.jpg' },
   ]);
   const badGear = mock([{ gear_images: { image: [42] } }]);
-  await assert.rejects(badGear.client[operation](), api.DivessiDecodeError);
+  await assert.rejects(
+    badGear.client[operation](undefined, { responseValidation: 'strict' }),
+    api.DivessiDecodeError,
+  );
 });
 
 test('configured API base paths are retained', async () => {
@@ -385,7 +470,7 @@ test('configured API base paths are retained', async () => {
   assert.throws(() => api.createClient({ apiBaseUrl: 'https://' }), TypeError);
 });
 
-test('client identity is transparent and case-insensitive header overrides are applied', async () => {
+test('SSI client identity defaults and case-insensitive header overrides are applied', async () => {
   const calls = [];
   const fetch = async (url, init) => {
     calls.push({ url, init });
@@ -393,14 +478,18 @@ test('client identity is transparent and case-insensitive header overrides are a
   };
   const client = api.createClient({ fetch, headers: { 'X-Client': 'default' } });
   await client.get_divelog();
-  assert.equal(calls[0].init.headers['user-agent'], 'divessi-client/0.1.0');
+  assert.equal(calls[0].init.headers['user-agent'], 'Dart/3.12 (dart:io)');
   assert.equal(calls[0].init.headers['user-agent'], api.CLIENT_USER_AGENT);
   const query = new URL(calls[0].url).searchParams;
-  for (const key of ['ssiapp', 'version', 'appVersion', 'platform', 'brand', 'context'])
-    assert.equal(query.has(key), false);
+  assert.equal(query.get('ssiapp'), '0815_IOS');
+  assert.equal(query.get('version'), 'IOS_5.0.43');
+  assert.equal(query.get('appVersion'), '5.0.43');
+  assert.equal(query.get('platform'), 'IOS');
+  assert.equal(query.get('brand'), 'SSI');
+  assert.equal(query.get('context'), 's');
   await client.get_divelog(undefined, {
     headers: { 'User-Agent': 'caller/1', 'x-CLIENT': 'call' },
-    metadata: { lang: 'eng' },
+    metadata: { lang: 'eng', ssiapp: '0815_ADR', version: 'custom-version' },
   });
   assert.equal(calls[1].init.headers['user-agent'], 'caller/1');
   assert.equal(calls[1].init.headers['x-client'], 'call');
@@ -409,6 +498,8 @@ test('client identity is transparent and case-insensitive header overrides are a
     1,
   );
   assert.equal(new URL(calls[1].url).searchParams.get('lang'), 'eng');
+  assert.equal(new URL(calls[1].url).searchParams.get('ssiapp'), '0815_ADR');
+  assert.equal(new URL(calls[1].url).searchParams.get('version'), 'custom-version');
   await api.createClient({ fetch, userAgent: null }).get_divelog();
   assert.equal(calls[2].init.headers['user-agent'], undefined);
   await api.createClient({ fetch, userAgent: 'custom/2' }).get_divelog();
@@ -421,6 +512,266 @@ test('published operations use only the account API and carry no provenance payl
     assert.equal(spec.service, 'api');
     assert.ok(['session', 'none'].includes(spec.auth));
     assert.equal(Object.hasOwn(spec, 'evidence'), false);
-    assert.equal(Object.hasOwn(spec, 'binary'), false);
+    if (spec.binary) {
+      assert.equal(spec, api.operations.initialSites);
+      assert.equal(spec.auth, 'none');
+      assert.equal(spec.output, 'ArrayBuffer');
+    }
   }
+});
+
+test('initialSites downloads ZIP bytes without a token through both public APIs', async () => {
+  const calls = [];
+  const archive = new Uint8Array([80, 75, 3, 4]);
+  const client = api.createClient({
+    token: 'private-session',
+    fetch: async (url, init) => {
+      calls.push({ url, init });
+      return new Response(archive, { headers: { 'content-type': 'application/zip' } });
+    },
+  });
+  const abort = new AbortController();
+  const result = await client.initialSites(undefined, { signal: abort.signal });
+  assert.ok(result.data instanceof ArrayBuffer);
+  assert.deepEqual(new Uint8Array(result.data), archive);
+  assert.equal(result.status, 200);
+  const url = new URL(calls[0].url);
+  assert.equal(url.pathname, '/app/APP_CACHE_SITES.zip');
+  assert.equal(url.searchParams.has('token'), false);
+  assert.equal(url.searchParams.has('what'), false);
+  assert.equal(url.searchParams.get('ssiapp'), '0815_IOS');
+  assert.equal(calls[0].init.headers.accept, 'application/zip');
+  assert.equal(calls[0].init.signal, abort.signal);
+  assert.deepEqual(new Uint8Array((await api.initialSites(client)).data), archive);
+  await assert.rejects(client.initialSites(undefined, { decode: () => [] }), TypeError);
+  assert.equal(calls.length, 2);
+});
+
+test('initialSites preserves HTTP errors instead of returning error bodies as ZIP bytes', async () => {
+  const { client } = mock({ message: 'Unavailable' }, 503);
+  await assert.rejects(
+    client.initialSites(),
+    (error) => error instanceof api.DivessiHttpError && error.status === 503,
+  );
+});
+
+test('confirmation identifiers accept numeric and string SSI encodings without coercion', async () => {
+  const identifiers = [0, 12345, '', '0', '0012345', '9007199254740993', null];
+  const body = {
+    logbook_details: identifiers.map((id) => ({
+      odin_user_log_nr: 41,
+      odin_user_log_user_confirmed_id: id,
+      server_extra: 'preserved',
+    })),
+  };
+  const { client } = mock(body);
+  assert.deepEqual((await client.get_divelog()).data, body);
+});
+
+test('confirmation identifiers still reject boolean and structured values', async () => {
+  for (const id of [false, true, [], {}]) {
+    const { client } = mock({ logbook_details: [{ odin_user_log_user_confirmed_id: id }] });
+    await assert.rejects(
+      client.get_divelog(undefined, { responseValidation: 'strict' }),
+      (error) =>
+        error instanceof api.DivessiDecodeError &&
+        error.field === '$.logbook_details[0].odin_user_log_user_confirmed_id' &&
+        error.expected === 'string or finite number',
+    );
+  }
+});
+
+test('confirmation identifier writes preserve accepted values and reject invalid inputs', async () => {
+  const { client, calls } = mock({});
+  for (const id of [0, 12345, '0012345', null]) {
+    await client.save_divelog({ json_data: { odin_user_log_user_confirmed_id: id } });
+    const payload = JSON.parse(new URLSearchParams(calls.at(-1).init.body).get('json_data'));
+    assert.equal(payload.odin_user_log_user_confirmed_id, id);
+  }
+  for (const id of [true, {}, [], Number.NaN, Number.POSITIVE_INFINITY]) {
+    await assert.rejects(
+      client.save_divelog({ json_data: { odin_user_log_user_confirmed_id: id } }),
+      api.DivessiInputError,
+    );
+  }
+  assert.equal(calls.length, 4);
+});
+
+test('lenient defaults keep every dive while omitting incompatible optional fields', async () => {
+  const body = {
+    logbook_details: Array.from({ length: 13 }, (_, index) => ({
+      odin_user_log_nr: index + 1,
+      odin_user_log_var_specialdive_id: index === 12 ? 123 : null,
+      odin_user_log_depth_m: index === 12 ? 'deep' : 10,
+      odin_user_log_deleted: '0',
+      extra: { retained: true },
+    })),
+  };
+  const { client } = mock(body);
+  const response = await client.get_divelog();
+  assert.equal(response.data.logbook_details.length, 13);
+  const last = response.data.logbook_details[12];
+  assert.equal(last.odin_user_log_nr, 13);
+  assert.equal(Object.hasOwn(last, 'odin_user_log_var_specialdive_id'), false);
+  assert.equal(Object.hasOwn(last, 'odin_user_log_depth_m'), false);
+  assert.equal(last.odin_user_log_deleted, false);
+  assert.deepEqual(last.extra, { retained: true });
+  assert.deepEqual(response.rawData, body);
+  assert.equal(response.rawData.logbook_details[12].odin_user_log_var_specialdive_id, 123);
+});
+
+test('lenient decoding applies recursively and skips only invalid array entries', async () => {
+  const { client } = mock({
+    logbook_details: [null, 7, { odin_user_log_nr: 5, odin_user_log_buddy_ids: [1, 'bad', 2] }],
+    logbook_sites: [{ odin_dive_sites_id: 3, odin_dive_sites_name: 123 }],
+  });
+  const { data } = await client.get_divelog();
+  assert.deepEqual(data.logbook_details, [
+    { odin_user_log_nr: 5, odin_user_log_buddy_ids: [1, 2] },
+  ]);
+  assert.deepEqual(data.logbook_sites, [{ odin_dive_sites_id: 3 }]);
+});
+
+test('response mode supports strict opt-in and per-call overrides', async () => {
+  const client = api.createClient({
+    responseValidation: 'strict',
+    fetch: async () => Response.json({ logbook_details: [{ odin_user_log_depth_m: 'deep' }] }),
+  });
+  await assert.rejects(client.get_divelog(), api.DivessiDecodeError);
+  assert.deepEqual((await client.get_divelog(undefined, { responseValidation: 'lenient' })).data, {
+    logbook_details: [{}],
+  });
+  assert.throws(() => api.createClient({ responseValidation: 'disabled' }), TypeError);
+  await assert.rejects(
+    client.get_divelog(undefined, { responseValidation: 'disabled' }),
+    TypeError,
+  );
+});
+
+test('lenient decoding still rejects unusable response envelopes and HTTP failures', async () => {
+  const envelope = mock('unexpected body');
+  await assert.rejects(envelope.client.get_divelog(), api.DivessiDecodeError);
+  const http = mock({ error_message: 'Unavailable' }, 503);
+  await assert.rejects(http.client.get_divelog(), api.DivessiHttpError);
+});
+
+test('custom decoders receive unmodified fields regardless of response mode', async () => {
+  const { client } = mock({ logbook_details: [{ odin_user_log_depth_m: 'deep' }] });
+  const response = await client.get_divelog(undefined, {
+    responseValidation: 'strict',
+    decode(value) {
+      return value.logbook_details[0].odin_user_log_depth_m;
+    },
+  });
+  assert.equal(response.data, 'deep');
+  assert.equal(response.rawData.logbook_details[0].odin_user_log_depth_m, 'deep');
+});
+
+test('rawData stays independent of edits to modeled and unknown nested response data', async () => {
+  const body = {
+    logbook_details: [
+      {
+        odin_user_log_deleted: '0',
+        odin_user_log_buddy_ids: [1, 2],
+        server_extra: { notes: ['original', null] },
+      },
+    ],
+    logbook_history: { 2025: 4 },
+  };
+  for (const responseValidation of ['lenient', 'strict']) {
+    const { client } = mock(body);
+    const response = await client.get_divelog(undefined, { responseValidation });
+    response.data.logbook_details[0].odin_user_log_buddy_ids.push(3);
+    response.data.logbook_details[0].server_extra.notes[0] = 'edited';
+    response.data.logbook_history[2025] = 99;
+    assert.deepEqual(response.rawData, body);
+    response.rawData.logbook_details[0].server_extra.notes[1] = 'raw edit';
+    assert.equal(response.data.logbook_details[0].server_extra.notes[1], null);
+  }
+});
+
+test('custom decoder mutations leave the original rawData intact', async () => {
+  const body = {
+    logbook_details: [{ odin_user_log_depth_m: 10, extra: { note: 'original' } }],
+  };
+  const { client } = mock(body);
+  const response = await client.get_divelog(undefined, {
+    decode(value) {
+      delete value.logbook_details[0].odin_user_log_depth_m;
+      value.logbook_details[0].extra.note = 'edited';
+      return value;
+    },
+  });
+  assert.deepEqual(response.rawData, body);
+  assert.equal(Object.hasOwn(response.data.logbook_details[0], 'odin_user_log_depth_m'), false);
+  assert.equal(response.data.logbook_details[0].extra.note, 'edited');
+});
+
+test('unmodeled JSON responses also separate data from rawData', async () => {
+  const body = [{ nested: { items: [1, null, 'original'] } }];
+  const { client } = mock(body);
+  const response = await client.get_vars();
+  response.data[0].nested.items[2] = 'edited';
+  assert.deepEqual(response.rawData, body);
+});
+
+test('logbook_buddies uses the Buddy model and normalizes legacy boolean flags', async () => {
+  const { client } = mock({
+    logbook_buddies: [
+      {
+        id: 7,
+        forename: 'Anna',
+        lastname: 'Berger',
+        city: 'Graz',
+        country: 'AUT',
+        leader_nr: '001234',
+        leader_active: 1,
+        favorite: '1',
+        deleted: 0,
+        extra: { preserved: true },
+      },
+    ],
+  });
+  const response = await client.get_divelog();
+  assert.deepEqual(response.data.logbook_buddies, [
+    {
+      id: 7,
+      forename: 'Anna',
+      lastname: 'Berger',
+      city: 'Graz',
+      country: 'AUT',
+      leader_nr: '001234',
+      leader_active: true,
+      favorite: true,
+      deleted: false,
+      extra: { preserved: true },
+    },
+  ]);
+  assert.equal(response.rawData.logbook_buddies[0].favorite, '1');
+});
+
+test('logbook buddies remain optional and tolerate incomplete records', async () => {
+  for (const body of [{}, { logbook_buddies: null }, { logbook_buddies: [] }]) {
+    const { client } = mock(body);
+    assert.deepEqual((await client.get_divelog()).data, body);
+  }
+  const { client } = mock({
+    logbook_buddies: [
+      null,
+      {
+        id: 'bad',
+        city: 123,
+        country: 'AUT',
+        firstname: 'Test',
+        leader_nr: 12345,
+      },
+    ],
+  });
+  assert.deepEqual((await client.get_divelog()).data.logbook_buddies, [
+    {
+      country: 'AUT',
+      firstname: 'Test',
+      leader_nr: 12345,
+    },
+  ]);
 });
