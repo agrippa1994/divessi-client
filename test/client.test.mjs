@@ -714,3 +714,64 @@ test('unmodeled JSON responses also separate data from rawData', async () => {
   response.data[0].nested.items[2] = 'edited';
   assert.deepEqual(response.rawData, body);
 });
+
+test('logbook_buddies uses the Buddy model and normalizes legacy boolean flags', async () => {
+  const { client } = mock({
+    logbook_buddies: [
+      {
+        id: 7,
+        forename: 'Anna',
+        lastname: 'Berger',
+        city: 'Graz',
+        country: 'AUT',
+        leader_nr: '001234',
+        leader_active: 1,
+        favorite: '1',
+        deleted: 0,
+        extra: { preserved: true },
+      },
+    ],
+  });
+  const response = await client.get_divelog();
+  assert.deepEqual(response.data.logbook_buddies, [
+    {
+      id: 7,
+      forename: 'Anna',
+      lastname: 'Berger',
+      city: 'Graz',
+      country: 'AUT',
+      leader_nr: '001234',
+      leader_active: true,
+      favorite: true,
+      deleted: false,
+      extra: { preserved: true },
+    },
+  ]);
+  assert.equal(response.rawData.logbook_buddies[0].favorite, '1');
+});
+
+test('logbook buddies remain optional and tolerate incomplete records', async () => {
+  for (const body of [{}, { logbook_buddies: null }, { logbook_buddies: [] }]) {
+    const { client } = mock(body);
+    assert.deepEqual((await client.get_divelog()).data, body);
+  }
+  const { client } = mock({
+    logbook_buddies: [
+      null,
+      {
+        id: 'bad',
+        city: 123,
+        country: 'AUT',
+        firstname: 'Test',
+        leader_nr: 12345,
+      },
+    ],
+  });
+  assert.deepEqual((await client.get_divelog()).data.logbook_buddies, [
+    {
+      country: 'AUT',
+      firstname: 'Test',
+      leader_nr: 12345,
+    },
+  ]);
+});

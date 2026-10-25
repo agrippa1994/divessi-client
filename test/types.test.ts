@@ -4,6 +4,7 @@ import {
   login,
   type JsonValue,
   type DiveLog,
+  type Buddy,
   type ResponseValidation,
 } from 'divessi-client';
 const mode: ResponseValidation = 'lenient';
@@ -12,6 +13,10 @@ async function check() {
   const auth = await login(client, { l: 'user@example.invalid', p: 'password' });
   const token: string | null | undefined = auth.data.token;
   const dives = await get_divelog(client, undefined, { responseValidation: 'strict' });
+  const buddies: Buddy[] | null | undefined = dives.data.logbook_buddies;
+  const leader: string | number | null | undefined = buddies?.[0]?.leader_nr;
+  const city: string | null | undefined = buddies?.[0]?.city;
+  void [buddies, leader, city];
   const original: JsonValue | undefined = dives.rawData;
   const emptyDive: DiveLog = {};
   void [original, emptyDive];

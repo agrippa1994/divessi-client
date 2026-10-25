@@ -16,6 +16,10 @@ export interface Buddy {
   localRefId?: number | null;
   /** Postal address. */
   address?: string | null;
+  /** City returned with a logbook buddy. */
+  city?: string | null;
+  /** Country code or display name returned with a logbook buddy. */
+  country?: string | null;
   /** Date of birth; date encoding is unspecified. */
   dob?: JsonValue | null;
   /** Free-text comment. */
@@ -26,14 +30,16 @@ export interface Buddy {
   email?: string | null;
   /** Given name. */
   firstname?: string | null;
+  /** Alternate given-name field returned with a logbook buddy. */
+  forename?: string | null;
   /** Gender code; allowed values are unspecified. */
   gender?: number | null;
   /** Image reference; URL/path conventions depend on this model. */
   image?: string | null;
   /** Family name. */
   lastname?: string | null;
-  /** Buddy’s leader/instructor registration number. */
-  leader_nr?: number | null;
+  /** Buddy’s leader/instructor registration number; string and numeric encodings are preserved. */
+  leader_nr?: string | number | null;
   /** Whether the buddy’s leader/instructor status is active. */
   leader_active?: boolean | null;
   /** Master user identifier for the linked buddy. */
@@ -1060,6 +1066,8 @@ export interface DivelogResponse {
   logbook_details?: DiveLog[] | null;
   /** Dive-site records associated with the returned logs. */
   logbook_sites?: Site[] | null;
+  /** Buddy records included with the logbook. */
+  logbook_buddies?: Buddy[] | null;
 }
 
 export interface EmergencyContact {
